@@ -1,0 +1,9 @@
+.DS_Store
+dist/
+build/
+node_modules/
+thumbs.db
+.idea/
+native_build/
+yarn-error.log
+.#*

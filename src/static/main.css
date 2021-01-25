@@ -1,0 +1,69 @@
+html {
+    overflow: hidden;
+    scroll-behavior: smooth;
+
+}
+body {
+    background: rgb(116,5,120);
+    background: linear-gradient(322deg, rgba(116,5,120,1) 0%,
+				rgba(5,75,142,1) 100%); 
+    background-attachment: fixed;
+    padding: 0;
+    margin: 0;
+    color: #eee;
+}
+#app-top {
+    max-width: 500px;
+    margin: auto;
+    font-family: 'Source Sans Pro', sans-serif;
+    display: flex;
+    height: 95vh;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding-bottom: 20px;
+}
+h1 {
+    font-size: 3rem;
+    text-shadow: -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000;
+}
+#logo {
+    width: 40%;
+    min-width: 150px;
+}
+#bottom-notes {
+    color: #ddd;
+    text-align: center;
+}
+a {
+    color: #00ff00;
+}
+#qmark {
+    position: relative;
+    display: inline-block;
+    background: #aaaa;
+    border-radius: 50%;
+    top: .9em;
+    height: 2em;
+    width: 2em;
+    left: .35em;
+    bottom: .25em;
+    text-align: center;
+    margin: auto;
+    cursor: pointer;
+}
+#qmark p {
+    font-size: 1.2em;
+    position: relative;
+    bottom: .7em;
+}
+#questions {
+    margin: auto;
+    height: 100vh;
+    font-family: 'Source Sans Pro', sans-serif;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+}
