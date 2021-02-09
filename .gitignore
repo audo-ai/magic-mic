@@ -6,4 +6,5 @@ thumbs.db
 .idea/
 native_build/
 yarn-error.log
+.dir-local.el
 .#*
