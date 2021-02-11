@@ -19,7 +19,7 @@ std::size_t Denoiser::willspew() {
 std::size_t Denoiser::spew(float *out, std::size_t maxsize) {
   torch::Tensor temp = torch::from_blob((float*)in.data(), in.size());
   temp = temp.contiguous();
-  std::size_t size;
-  std::copy(temp.data_ptr<float>(), temp.data_ptr<float>()+size, out);
-  return size;
+  std::copy(temp.data_ptr<float>(), temp.data_ptr<float>()+in.size(), out);
+  in.resize(0);
+  return in.size();
 }
