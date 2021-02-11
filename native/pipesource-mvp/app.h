@@ -1,15 +1,22 @@
 #pragma once
 
+#include <iostream>
+#include <fstream>
+#include <string>
 #include <memory>
 
 #include <pulse/pulseaudio.h>
 
+#include <denoiser.h>
+
 using std::shared_ptr;
+using std::string;
+using std::ofstream;
 class App;
 // Only supports a single instance
 class App {
  public:
-  App();
+  App(string pf);
 
   void run();
  private:
@@ -18,6 +25,11 @@ class App {
   const char *client_name = "Client Name";
   const int target_latency = 0;
 
+  string pipe_file_name;
+  ofstream pipe;
+
+  
+
 
   // TODO: I don't think we should allow mainloop to be freed before ctx and
   // rec_stream but, I can't figure out a good way to fix that
@@ -25,6 +37,8 @@ class App {
   shared_ptr<pa_context> ctx;
   shared_ptr<pa_stream> rec_stream;
   volatile bool should_run;
+
+  Denoiser denoiser;
 
   void connect();
   void run_mainloop();
