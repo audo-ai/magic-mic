@@ -47,4 +47,6 @@ if (${BUILD_PIPESOURCE_MVP})
   find_package(PulseAudio REQUIRED)
   target_include_directories(pipesource-mvp PRIVATE ${PULSEAUDIO_INCLUDE_DIR})
   target_link_libraries(pipesource-mvp ${PULSEAUDIO_LIBRARY})
+
+  target_link_libraries(pipesource-mvp denoiser)
 endif()

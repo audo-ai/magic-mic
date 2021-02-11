@@ -1,6 +1,10 @@
 #include <sstream>
 #include <csignal>
 #include <iostream>
+#include <ios>
+
+#include <fcntl.h>
+#include <sys/stat.h>
 
 #include "app.h"
 
@@ -11,9 +15,20 @@ using std::stringstream;
 // That gives a pretty good way to structure. I'm making some changes to make it
 // a little more cpp imo
 
-App::App() {
+App::App(std::string pf) : denoiser(), pipe_file_name(pf) {
   if (App::global_app) {
-    throw "Only a single instance allowed!";
+    throw std::string( "Only a single instance allowed!");
+  }
+  struct stat s;
+  int err = stat(pipe_file_name.c_str(), &s);
+  if (err) {
+    throw std::string( "Can't access file");
+  }
+  pipe = ofstream(pipe_file_name, std::ios_base::out|std::ios_base::binary);
+  if (!pipe.is_open()) {
+    stringstream ss;
+    ss << "Failed to open file \""<< pipe_file_name << "\"";
+    throw ss.str();
   }
   App::global_app = this;
   signal(SIGINT, App::signal_handler);
@@ -25,7 +40,7 @@ App::App() {
 void App::connect() {
   ctx = shared_ptr<pa_context>(pa_context_new(pa_mainloop_get_api(mainloop.get()), client_name), free_pa_context);
   if (!ctx) {
-    throw "pa_context_new failed";
+    throw std::string( "pa_context_new failed");
   }
 
   int err = pa_context_connect(ctx.get(), nullptr, (pa_context_flags)0, nullptr);
@@ -49,6 +64,15 @@ void App::run() {
     if (rec_stream) {
       poll_recording_stream();
     }
+    size_t spew_size;
+    if ((spew_size = denoiser.willspew())) {
+      float *arr = new float[spew_size];
+      denoiser.spew(arr, spew_size);
+      // std::cout<<"read " << spew_size << " bytes from denoiser" << std::endl;
+      pipe.write((char *)arr, spew_size*4);
+
+      delete[] arr;
+    }
   }
 }
 
@@ -67,7 +91,7 @@ void App::poll_context() {
   case PA_CONTEXT_FAILED:
   case PA_CONTEXT_TERMINATED:
     /* context connection failed */
-    throw "failed to connect to pulseaudio context!";
+    throw std::string( "failed to connect to pulseaudio context!");
   default:
     /* nothing interesting */
     break;
@@ -75,10 +99,11 @@ void App::poll_context() {
 }
 
 void App::start_recording_stream() {
+  // TODO: make this configurable
     pa_sample_spec sample_spec = {};
     sample_spec.format = PA_SAMPLE_FLOAT32LE;
-    sample_spec.rate = 44100;
-    sample_spec.channels = 2;
+    sample_spec.rate = 16384;
+    sample_spec.channels = 1;
 
     rec_stream = shared_ptr<pa_stream>(pa_stream_new(ctx.get(), rec_stream_name, &sample_spec, nullptr), free_pa_stream);
     if (!rec_stream) {
@@ -100,12 +125,24 @@ void App::poll_recording_stream() {
   switch  (state) {
   case PA_STREAM_READY:
     /* stream is writable, proceed now */
+    if (pa_stream_readable_size(rec_stream.get()) > 0) {
+      const void *data;
+      size_t nbytes;
+      int err = pa_stream_peek(rec_stream.get(), &data, &nbytes);
+      if (err) {
+	stringstream ss;
+	ss << "pa_stream_peak: " << pa_strerror(err);
+	throw ss.str();
+      }
+      denoiser.feed((float *)data, nbytes/4);
+      pa_stream_drop(rec_stream.get());
+    }
     break;
 
   case PA_STREAM_FAILED:
   case PA_STREAM_TERMINATED:
     /* stream is closed, exit */
-    throw "recording_stream closed unexpectedly";
+    throw std::string("recording_stream closed unexpectedly");
   default:
     /* stream is not ready yet */
     return;
