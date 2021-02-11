@@ -15,3 +15,15 @@ variables to configure it appropriatly.
 ## Denoiser
 A library that will hopefully be used as a cross platform denosier engine. Still
 in progress. Building setting `-DCMAKE_PREFIX_PATH` to the path to libtorch.
+
+## pipesource-mvp
+Start by loading a module-pipe-source with correct sample spec
+```
+pactl load-module module-pipe-source source_name=virtmic file=$FILE
+format=float32le rate=16384 channels=1
+```
+
+Then run the app
+```
+./pipesource-mvp /tmp/virtmic
+```
