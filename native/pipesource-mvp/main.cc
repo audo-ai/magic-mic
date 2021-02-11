@@ -1,10 +1,14 @@
 #include <iostream>
+#include <string>
 
-#include <pulse/pulseaudio.h>
+#include "app.h"
 
-int main() {
-  std::cout<<"Let's test that linkage is all good" << std::endl;
-  std::cout<<"Calling pa_msleep(3000)" << std::endl;
-  pa_msleep(3000);
-  std::cout << "Back up, bye!" << std::endl;
+int main(int argc, char **argv) {
+  try {
+    std::cout << "Starting app" << std::endl;
+    App app;
+    app.run();
+  } catch (std::string &s) {
+    std::cout << "App failed with error: \"" << s << "\"" << std::endl;
+  }
 }

@@ -41,7 +41,7 @@ endif()
 
 set(BUILD_PIPESOURCE_MVP CACHE BOOL "should we build pipe source mvp")
 if (${BUILD_PIPESOURCE_MVP})
-  add_executable(pipesource-mvp pipesource-mvp/main.cc)
+  add_executable(pipesource-mvp pipesource-mvp/main.cc pipesource-mvp/app.cc)
 
   target_include_directories(pipesource-mvp PRIVATE denoiser/)
   find_package(PulseAudio REQUIRED)
