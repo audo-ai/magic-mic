@@ -104,7 +104,7 @@ void App::start_recording_stream() {
   // TODO: make this configurable
     pa_sample_spec sample_spec = {};
     sample_spec.format = PA_SAMPLE_FLOAT32LE;
-    sample_spec.rate = 16384;
+    sample_spec.rate = 16000;
     sample_spec.channels = 1;
 
     rec_stream = shared_ptr<pa_stream>(pa_stream_new(ctx.get(), rec_stream_name, &sample_spec, nullptr), free_pa_stream);
