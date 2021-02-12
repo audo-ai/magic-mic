@@ -5,7 +5,7 @@ project(magic-mic)
 
 # TODO: Maybe eventuall seperate out the CMakeLists.txt into each directory
 # Configure denoiser
-add_library(denoiser SHARED denoiser/denoiser.cc)
+add_library(denoiser SHARED denoiser/denoiser.cc denoiser/running_std.cc)
 
 find_package(Torch REQUIRED)
 message("${TORCH_LIBRARIES}")
