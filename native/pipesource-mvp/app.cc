@@ -2,6 +2,7 @@
 #include <csignal>
 #include <iostream>
 #include <ios>
+#include <cassert>
 
 #include <fcntl.h>
 #include <sys/stat.h>
@@ -67,7 +68,8 @@ void App::run() {
     size_t spew_size;
     if ((spew_size = denoiser.willspew())) {
       float *arr = new float[spew_size];
-      denoiser.spew(arr, spew_size);
+      assert(spew_size == denoiser.spew(arr, spew_size));
+
       // std::cout<<"read " << spew_size << " bytes from denoiser" << std::endl;
       pipe.write((char *)arr, spew_size*4);
 

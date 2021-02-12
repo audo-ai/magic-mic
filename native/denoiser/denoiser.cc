@@ -31,15 +31,17 @@ void Denoiser::feed(float *arr, std::size_t size) {
   std.feed(arr, size);
 }
 std::size_t Denoiser::willspew() {
-  if (in.size() >= valid_length) {
-    return in.size() - (in.size() % valid_length);
+  // I can't figure out a good way to calculate this
+  int written = 0;
+  while (in.size() - written >= valid_length) {
+    written += hop_size;
   }
-  return 0;
+  return written;
 }
 std::size_t Denoiser::spew(float *out, std::size_t maxsize) {
-  int chunk;
-  for (chunk = 1; chunk * valid_length <= maxsize && chunk*valid_length <= in.size(); chunk++) {
-    torch::Tensor audio = torch::from_blob((float *)in.data() + (chunk-1)*valid_length, valid_length, options);
+  int written = 0;
+  while (written + hop_size <= maxsize && (in.size() - written) >= valid_length) {
+    torch::Tensor audio = torch::from_blob((float *)in.data() + written, valid_length, options);
     audio /= std.std();
     audio = audio.view(c10::IntArrayRef({1,1,valid_length}));
     torch::jit::IValue model_out = module.forward(std::vector<torch::IValue>({torch::jit::IValue(audio), torch::jit::IValue(conv_hidden), torch::jit::IValue(lstm_hidden)}));
@@ -52,10 +54,12 @@ std::size_t Denoiser::spew(float *out, std::size_t maxsize) {
     lstm_hidden = tuple->elements()[2].toTensor();
 
     clean = clean.contiguous();
-    std::copy(clean.data_ptr<float>(), clean.data_ptr<float>() + clean.numel(), out);
+    assert(clean.numel() == hop_size);
+    std::copy(clean.data_ptr<float>(), clean.data_ptr<float>() + hop_size, out+written);
+    written += hop_size;
   }
-  if (chunk != 1) {
-    in.erase(in.begin(), in.begin() + (chunk - 1) * valid_length);
+  if (written) {
+    in.erase(in.begin(), in.begin() + written);
   }
-  return (chunk-1)*valid_length;
+  return written;
 }

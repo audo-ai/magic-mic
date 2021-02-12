@@ -20,10 +20,11 @@ class Denoiser {
   std::size_t spew(float *out, std::size_t maxsize);
   std::size_t get_size_multiple();
   
-  const int min_spew = valid_length;
+  const int min_spew = hop_size;
 
  private:
   static constexpr int valid_length = 596;
+  static constexpr int hop_size = 256;
 
   at::TensorOptions options;
 
