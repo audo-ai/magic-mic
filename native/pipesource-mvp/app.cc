@@ -15,7 +15,7 @@ using std::stringstream;
 // That gives a pretty good way to structure. I'm making some changes to make it
 // a little more cpp imo
 
-App::App(std::string pf) : denoiser(), pipe_file_name(pf) {
+App::App(std::string pf) : denoiser("/home/gabe/code/audo/audo-ml/denoiser/realtime-w-hidden-test.ts"), pipe_file_name(pf) {
   if (App::global_app) {
     throw std::string( "Only a single instance allowed!");
   }
