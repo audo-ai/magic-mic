@@ -1,0 +1,19 @@
+.device-selector {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    h1 {
+	font-family: "AFontBold";
+	text-align: left;
+	color: #f2f2f2;
+	font-size: 26px;
+    }
+    .remove-noise {
+	align-self: flex-end;
+	margin-top: 20px;
+
+	color: #f2f2f2;
+	font-size: 20px;
+	font-family: "AFontMedium";
+    }
+}
