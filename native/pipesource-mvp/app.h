@@ -16,7 +16,8 @@ class App;
 // Only supports a single instance
 class App {
  public:
-  App(string pf);
+  App();
+  ~App();
 
   void run();
  private:
@@ -28,15 +29,15 @@ class App {
   string pipe_file_name;
   ofstream pipe;
 
-  
-
-
   // TODO: I don't think we should allow mainloop to be freed before ctx and
   // rec_stream but, I can't figure out a good way to fix that
   shared_ptr<pa_mainloop> mainloop;
   shared_ptr<pa_context> ctx;
   shared_ptr<pa_stream> rec_stream;
   volatile bool should_run;
+
+  int pipesource_module_idx;
+  pa_operation *module_load_operation;
 
   Denoiser denoiser;
 
@@ -45,6 +46,9 @@ class App {
   void poll_context();
   void start_recording_stream();
   void poll_recording_stream();
+  void poll_operation();
+  void load_pipesource_module();
+  static void index_cb(pa_context *c, unsigned int idx, void *u);
 
   // Handle ctrl-c
   static App *global_app;
