@@ -3,6 +3,7 @@
 #include <iostream>
 #include <ios>
 #include <cassert>
+#include <cstdlib>
 
 #include <fcntl.h>
 #include <sys/stat.h>
@@ -16,9 +17,13 @@ using std::stringstream;
 // That gives a pretty good way to structure. I'm making some changes to make it
 // a little more cpp imo
 
-App::App(std::string pf) : denoiser("/home/gabe/code/audo/audo-ml/denoiser/realtime-w-hidden-test.ts"), pipe_file_name(pf) {
+App::App()
+    : denoiser(
+	  "/home/gabe/code/audo/audo-ml/denoiser/realtime-w-hidden-test.ts"),
+      pipe_file_name("/dev/null"), pipesource_module_idx(-1),
+      module_load_operation(nullptr) {
   if (App::global_app) {
-    throw std::string( "Only a single instance allowed!");
+    throw std::string("Only a single instance allowed!");
   }
   struct stat s;
   int err = stat(pipe_file_name.c_str(), &s);
@@ -54,6 +59,7 @@ void App::connect() {
 
 void App::run() {
   int err;
+  bool swapped_file = false;
 
   while (should_run) {
     if ((err = pa_mainloop_iterate(mainloop.get(), 1, NULL)) < 0) {
@@ -62,6 +68,22 @@ void App::run() {
       throw ss.str();
     }
     poll_context();
+
+    if (-1 == pipesource_module_idx) {
+      poll_operation();
+      continue;
+    } else if (!swapped_file) {
+      pipe_file_name = "/tmp/virtmic";
+      pipe =
+	  ofstream(pipe_file_name, std::ios_base::out | std::ios_base::binary);
+      if (!pipe.is_open()) {
+	stringstream ss;
+	ss << "Failed to open file \"" << pipe_file_name << "\"";
+        throw ss.str();
+      }
+      swapped_file = true;
+    }
+
     if (rec_stream) {
       poll_recording_stream();
     }
@@ -78,13 +100,15 @@ void App::run() {
   }
 }
 
-
 void App::poll_context() {
   pa_context_state_t state = pa_context_get_state(ctx.get());
 
   switch  (state) {
   case PA_CONTEXT_READY:
     /* context connected to server, */
+    if (!module_load_operation) {
+      load_pipesource_module();
+    }
     if (!rec_stream) {
       start_recording_stream();
     }
@@ -98,6 +122,33 @@ void App::poll_context() {
     /* nothing interesting */
     break;
   }
+}
+
+void App::poll_operation() {
+  if (!module_load_operation) {
+    return;
+  }
+  switch(pa_operation_get_state(module_load_operation)) {
+  case PA_OPERATION_CANCELLED:
+    throw std::string("module_load_operation cancelled!");
+  case PA_OPERATION_DONE:
+    if (-1 == pipesource_module_idx) {
+      throw std::string("Failed to load module-pipesource");
+    } else {
+      pa_operation_unref(module_load_operation);
+    } 
+  default:
+    break;
+  }
+}
+
+void App::load_pipesource_module() {
+  module_load_operation = pa_context_load_module(ctx.get(), "module-pipe-source", "source_name=virtmic file=/tmp/virtmic format=float32le rate=16000 channels=1", App::index_cb, this);
+}
+
+void App::index_cb(pa_context *c, unsigned int idx, void *u) {
+  App *m = (App *)u;
+  m->pipesource_module_idx = idx;
 }
 
 void App::start_recording_stream() {
@@ -166,5 +217,12 @@ void App::signal_handler(int signal) {
     std::cout << "Recieved signal, exiting";
     App::global_app->should_run = false;
     break;
+  }
+}
+
+App::~App() {
+  if (-1 != pipesource_module_idx && ctx && PA_CONTEXT_READY == pa_context_get_state(ctx.get())) {
+    pa_context_unload_module(ctx.get(), pipesource_module_idx, nullptr, nullptr);
+    std::cerr<< "Unloading module" << std::endl;
   }
 }
