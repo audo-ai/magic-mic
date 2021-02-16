@@ -13,6 +13,7 @@ import speaker from '../static/speaker.svg';
 const SelectWithImage = ({options, image, chosen, setChosen}) => {
     return <div className="select-with-image">
 	       <img src={image} />
+	       <div class="vert-line"/>
 	       <select 
 		   value={chosen}
 		   onChange={(e) => setChose(e.target.value)}
