@@ -4,6 +4,8 @@ import ReactDOM from 'react-dom';
 import '../static/main.scss';
 import '../static/device_selector.scss';
 import '../static/select.scss';
+import '../static/toggle.scss';
+
 import logo from '../static/logo.png';
 import mic from '../static/mic.svg';
 import speaker from '../static/speaker.svg';
@@ -25,8 +27,11 @@ const DeviceSelector = ({title, icon, devices}) => {
 	       <h1> {title} </h1>
 	       <SelectWithImage options={devices} image={icon} chosen={device} setChosen={setDevice}/>
 	       <div className="remove-noise">
-		   <label> Remove Noise </label>
-		   <input type="checkbox" />
+		   <label class="text"> Remove Noise </label>
+		   <label class="switch">
+		       <input type="checkbox" />
+		       <span class="slider round"></span>
+		   </label>
 	       </div>
 	   </div>;
 }
