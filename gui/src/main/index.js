@@ -14,10 +14,10 @@ function createMainWindow() {
 	webPreferences: {
 	    nodeIntegration: true
 	},
-	minWidth: 420,
-	minHeight: 500,
-	width: 560,
-	height: 620,
+	minWidth: 450,
+	minHeight: 575,
+	width: 450,
+	height: 575,
     });
 
     if (isDevelopment) {
