@@ -5,9 +5,6 @@
 #include <cassert>
 #include <cstdlib>
 
-#include <fcntl.h>
-#include <sys/stat.h>
-
 #include "app.h"
 
 App *App::global_app = nullptr;
@@ -20,22 +17,12 @@ using std::stringstream;
 App::App()
     : denoiser(
 	  "/home/gabe/code/audo/audo-ml/denoiser/realtime-w-hidden-test.ts"),
-      pipe_file_name("/dev/null"), pipesource_module_idx(-1),
-      module_load_operation(nullptr) {
+      pipesource_module_idx(-1), module_load_operation(nullptr),
+      state(InitContext) {
   if (App::global_app) {
     throw std::string("Only a single instance allowed!");
   }
-  struct stat s;
-  int err = stat(pipe_file_name.c_str(), &s);
-  if (err) {
-    throw std::string( "Can't access file");
-  }
-  pipe = ofstream(pipe_file_name, std::ios_base::out|std::ios_base::binary);
-  if (!pipe.is_open()) {
-    stringstream ss;
-    ss << "Failed to open file \""<< pipe_file_name << "\"";
-    throw ss.str();
-  }
+
   App::global_app = this;
   signal(SIGINT, App::signal_handler);
   mainloop = shared_ptr<pa_mainloop>(pa_mainloop_new(), pa_mainloop_free);
@@ -43,6 +30,12 @@ App::App()
 
   should_run = true;
 }
+
+void App::changeState(State s) {
+  std::cout << "Changin state from " << state << " to " << s << std::endl;
+  state = s;
+}
+
 void App::connect() {
   ctx = shared_ptr<pa_context>(pa_context_new(pa_mainloop_get_api(mainloop.get()), client_name), free_pa_context);
   if (!ctx) {
@@ -55,6 +48,7 @@ void App::connect() {
     ss << "pa_context_connect failed: " << pa_strerror(err);
     throw ss.str();
   }
+  changeState(WaitContextReady);
 }
 
 void App::run() {
@@ -62,40 +56,45 @@ void App::run() {
   bool swapped_file = false;
 
   while (should_run) {
-    if ((err = pa_mainloop_iterate(mainloop.get(), 1, NULL)) < 0) {
+    if ((err = pa_mainloop_iterate(mainloop.get(), 0, NULL)) < 0) {
       stringstream ss;
       ss << "pa_mainloop_iterate: " << pa_strerror(err);
       throw ss.str();
     }
-    poll_context();
-
-    if (-1 == pipesource_module_idx) {
+    // TODO figure out a way to respond to state changes. maybe do this along
+    // side of switching over to a state bitfield
+    switch (state) {
+    case InitContext:
+      throw std::string("Context should have been inited already");
+    case WaitContextReady:
+      poll_context();
+      break;
+    case InitModule:
+      load_pipesource_module();
+      break;
+    case WaitModuleReady:
       poll_operation();
-      continue;
-    } else if (!swapped_file) {
-      pipe_file_name = "/tmp/virtmic";
-      pipe =
-	  ofstream(pipe_file_name, std::ios_base::out | std::ios_base::binary);
-      if (!pipe.is_open()) {
-	stringstream ss;
-	ss << "Failed to open file \"" << pipe_file_name << "\"";
-        throw ss.str();
-      }
-      swapped_file = true;
-    }
-
-    if (rec_stream) {
+      break;
+    case InitRecStream:
+      start_recording_stream();
+      break;
+    case WaitRecStreamReady:
       poll_recording_stream();
-    }
-    size_t spew_size;
-    if ((spew_size = denoiser.willspew())) {
-      float *arr = new float[spew_size];
-      assert(spew_size == denoiser.spew(arr, spew_size));
+      break;
+    case Denoise:
+      poll_recording_stream();
+      size_t spew_size;
+      if ((spew_size = denoiser.willspew())) {
+	float *arr = new float[spew_size];
+	assert(spew_size == denoiser.spew(arr, spew_size));
 
-      // std::cout<<"read " << spew_size << " bytes from denoiser" << std::endl;
-      pipe.write((char *)arr, spew_size*4);
+	// std::cout<<"read " << spew_size << " bytes from denoiser" <<
+	// std::endl;
+	pipe.write((char *)arr, spew_size * 4);
 
-      delete[] arr;
+	delete[] arr;
+      }
+      break;
     }
   }
 }
@@ -106,11 +105,11 @@ void App::poll_context() {
   switch  (state) {
   case PA_CONTEXT_READY:
     /* context connected to server, */
-    if (!module_load_operation) {
-      load_pipesource_module();
-    }
-    if (!rec_stream) {
-      start_recording_stream();
+    if (this->state == WaitContextReady) {
+      changeState(InitModule);
+    } else {
+      // TODO when I get logging setup log something here because it shouldn't
+      // really happen
     }
     break;
 
@@ -136,14 +135,26 @@ void App::poll_operation() {
       throw std::string("Failed to load module-pipesource");
     } else {
       pa_operation_unref(module_load_operation);
-    } 
+
+      changeState(InitRecStream);
+
+      pipe =
+	  ofstream(pipe_file_name, std::ios_base::out | std::ios_base::binary);
+      if (!pipe.is_open()) {
+	stringstream ss;
+	ss << "Failed to open file \"" << pipe_file_name << "\"";
+        throw ss.str();
+      }
+    }
   default:
     break;
   }
 }
 
 void App::load_pipesource_module() {
+  pipe_file_name = "/tmp/virtmic";
   module_load_operation = pa_context_load_module(ctx.get(), "module-pipe-source", "source_name=virtmic file=/tmp/virtmic format=float32le rate=16000 channels=1", App::index_cb, this);
+  changeState(WaitModuleReady);
 }
 
 void App::index_cb(pa_context *c, unsigned int idx, void *u) {
@@ -171,6 +182,7 @@ void App::start_recording_stream() {
       ss << "pa_stream_connect_record: " << pa_strerror(err);
       throw ss.str();
     }
+    changeState(WaitRecStreamReady);
 }
 void App::poll_recording_stream() {
   pa_stream_state_t state = pa_stream_get_state(rec_stream.get());
@@ -178,6 +190,9 @@ void App::poll_recording_stream() {
   switch  (state) {
   case PA_STREAM_READY:
     /* stream is writable, proceed now */
+    if (this->state == WaitRecStreamReady) {
+      changeState(Denoise);
+    }
     if (pa_stream_readable_size(rec_stream.get()) > 0) {
       const void *data;
       size_t nbytes;
@@ -222,7 +237,29 @@ void App::signal_handler(int signal) {
 
 App::~App() {
   if (-1 != pipesource_module_idx && ctx && PA_CONTEXT_READY == pa_context_get_state(ctx.get())) {
-    pa_context_unload_module(ctx.get(), pipesource_module_idx, nullptr, nullptr);
-    std::cerr<< "Unloading module" << std::endl;
+    // TODO make this use logger when I get that
+    std::cerr<< std::endl << "Unloading module" << std::endl;
+    pa_operation *op = pa_context_unload_module(ctx.get(), pipesource_module_idx, nullptr, nullptr);
+    int i;
+    int err;
+    for (i = 0; !err && i < 1000; i++) {
+      if ((err = pa_mainloop_iterate(mainloop.get(), 0, NULL)) < 0) {
+	std::cerr << "Error: " << pa_strerror(err) << std::endl;
+	break;
+      }
+      switch (pa_operation_get_state(op)) {
+      case PA_OPERATION_RUNNING:
+	continue;
+      case PA_OPERATION_DONE:
+	i = 1000;
+	break;
+      case PA_OPERATION_CANCELLED:
+	err = 1;
+	break;
+      }
+    }
+    if (err) {
+      std::cerr << "Error unloading module" << std::endl;
+    }
   }
 }
