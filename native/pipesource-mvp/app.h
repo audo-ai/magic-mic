@@ -3,6 +3,7 @@
 #include <iostream>
 #include <string>
 #include <memory>
+#include <cstdio>
 
 #include <pulse/pulseaudio.h>
 
@@ -37,12 +38,21 @@ class App {
    const char *source = nullptr;
    const char *client_name = "Client Name";
    const int target_latency = 0;
+   const size_t buffer_length = 32000;
 
    string pipe_file_name;
-   ofstream pipe;
+   // It appears c++ doesn't do non blocking writes which is a problem for
+   // signal handling, so we need to go old school (sort of, still have
+   // shared_ptr which is sort of cool I guess)
+   int pipe_fd;
 
-   // TODO: I don't think we should allow mainloop to be freed before ctx and
-   // rec_stream but, I can't figure out a good way to fix that
+   // TODO: factor this out into a tiny ring buffer
+   float *buffer;
+   size_t write_idx;
+   size_t read_idx;
+
+   // TODO: I don't think we should allow mainloop to be freed before ctx
+   // and rec_stream but, I can't figure out a good way to fix that
    shared_ptr<pa_mainloop> mainloop;
    shared_ptr<pa_context> ctx;
    shared_ptr<pa_stream> rec_stream;
