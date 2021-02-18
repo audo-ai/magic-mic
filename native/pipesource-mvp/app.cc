@@ -4,6 +4,12 @@
 #include <ios>
 #include <cassert>
 #include <cstdlib>
+#include <cstring>
+#include <cerrno>
+
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
 
 #include "app.h"
 
@@ -22,6 +28,10 @@ App::App()
   if (App::global_app) {
     throw std::string("Only a single instance allowed!");
   }
+
+  buffer = new float[buffer_length];
+  write_idx = 0;
+  read_idx = 0;
 
   App::global_app = this;
   signal(SIGINT, App::signal_handler);
@@ -85,14 +95,30 @@ void App::run() {
       poll_recording_stream();
       size_t spew_size;
       if ((spew_size = denoiser.willspew())) {
-	float *arr = new float[spew_size];
-	assert(spew_size == denoiser.spew(arr, spew_size));
+	size_t spewed = denoiser.spew(buffer + write_idx, buffer_length - write_idx);
+	write_idx = (write_idx + spewed) % buffer_length;
 
-	// std::cout<<"read " << spew_size << " bytes from denoiser" <<
-	// std::endl;
-	pipe.write((char *)arr, spew_size * 4);
 
-	delete[] arr;
+	size_t to_write = write_idx - read_idx;
+	if (read_idx > write_idx) {
+	  to_write = buffer_length - read_idx;
+	}
+	ssize_t written = write(pipe_fd, buffer + read_idx, sizeof(float)*to_write);
+	if (written == -1) {
+	  switch (errno) {
+	  case EINTR:
+	  case EAGAIN:
+	    break;
+	  default:
+	    stringstream ss;
+	    ss << "pa_mainloop_iterate, write: " << strerror(errno);
+	    throw ss.str();
+          }
+	} else {
+	  written /= sizeof(float);
+	  read_idx = (written + read_idx) % buffer_length;
+        }
+	std::cout << written << " " << read_idx << " " << write_idx<< std::endl;
       }
       break;
     }
@@ -138,11 +164,11 @@ void App::poll_operation() {
 
       changeState(InitRecStream);
 
-      pipe =
-	  ofstream(pipe_file_name, std::ios_base::out | std::ios_base::binary);
-      if (!pipe.is_open()) {
+      // Not sure how O_APPEND works on pipes, but shouldn't hurt
+      pipe_fd = open(pipe_file_name.c_str(), O_WRONLY|O_APPEND|O_NONBLOCK);
+      if (-1 == pipe_fd) {
 	stringstream ss;
-	ss << "Failed to open file \"" << pipe_file_name << "\"";
+	ss << "Failed to open file \"" << pipe_file_name << "\" (" << strerror(errno) << ")";
         throw ss.str();
       }
     }
@@ -236,12 +262,20 @@ void App::signal_handler(int signal) {
 }
 
 App::~App() {
+  int err = 0;
+
+  if (pipe_fd) {
+    err = close(pipe_fd);
+  }
+  if (err) {
+    std::cerr << "Error closing pipe_fd: " << strerror(err) << std::endl;
+  }
+  delete buffer;
   if (-1 != pipesource_module_idx && ctx && PA_CONTEXT_READY == pa_context_get_state(ctx.get())) {
     // TODO make this use logger when I get that
     std::cerr<< std::endl << "Unloading module" << std::endl;
     pa_operation *op = pa_context_unload_module(ctx.get(), pipesource_module_idx, nullptr, nullptr);
     int i;
-    int err;
     for (i = 0; !err && i < 1000; i++) {
       if ((err = pa_mainloop_iterate(mainloop.get(), 0, NULL)) < 0) {
 	std::cerr << "Error: " << pa_strerror(err) << std::endl;
