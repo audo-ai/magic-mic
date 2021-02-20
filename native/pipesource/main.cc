@@ -6,7 +6,7 @@
 int main(int argc, char **argv) {
   try {
     std::cout << "Starting app" << std::endl;
-    App app;
+    PipesourceVirtualMic app;
     app.run();
   } catch (std::string &s) {
     std::cerr << "App failed with error: \"" << s << "\"" << std::endl;

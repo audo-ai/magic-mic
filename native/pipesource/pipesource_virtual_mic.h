@@ -4,23 +4,55 @@
 #include <string>
 #include <memory>
 #include <cstdio>
+#include <thread>
+#include <mutex>
+#include <future>
+#include <atomic>
 
 #include <pulse/pulseaudio.h>
 
 #include <denoiser.h>
+#include <virtual_mic.h>
 
+using std::atomic;
+using std::future;
+using std::lock_guard;
+using std::mutex;
+using std::pair;
+using std::promise;
 using std::shared_ptr;
 using std::string;
-using std::ofstream;
-class App;
+using std::thread;
+using std::vector;
+class PipeSourceVirtualMic;
 // Only supports a single instance
-class App {
+class PipeSourceVirtualMic : public VirtualMic {
  public:
-  App();
-  ~App();
+  // TODO Need to implement copy constructors
+  PipeSourceVirtualMic();
+  ~PipeSourceVirtualMic();
 
-  void run();
+  void stop();
+
+  void getStatus(promise<bool> p) override;
+  void getMicrophones(promise<vector<pair<int, string>>> p) override;
+  void setMicrophone(promise<void> p, int ind) override;
+  void setRemoveNoise(promise<void> p, bool b) override;
+
  private:
+   thread async_thread;
+   enum Action {
+     NoAction = 1,
+     GetMicrophones,
+     SetMicrophone,
+   };
+   promise<vector<pair<int, string>>> get_mics_promise;
+   promise<void> set_mic_promise;
+   enum ActionState {
+     NoActionState = 1,
+     GettingMicrophones,
+     SettingMicrophone
+   };
    enum State {
      InitContext = 1,
      WaitContextReady,
@@ -30,10 +62,12 @@ class App {
      WaitRecStreamReady,
      Denoise
    };
-   // TODO for now I guess a single state thing is ok, but I think it would make more sense to have some sort of state bitfield. It would allow parallel initialization and would overall be more elegant. It would be more resillient and more accuratly reflect the fact that whats relevant isn't really a line of execution but the statse of each resource and operation.
+   Action action;
+   ActionState action_state;
    State state;
    void changeState(State s);
 
+   // TODO for now I guess a single state thing is ok, but I think it would make more sense to have some sort of state bitfield. It would allow parallel initialization and would overall be more elegant. It would be more resillient and more accuratly reflect the fact that whats relevant isn't really a line of execution but the statse of each resource and operation.
    const char *rec_stream_name = "Recording Stream";
    const char *source = nullptr;
    const char *client_name = "Client Name";
@@ -56,13 +90,15 @@ class App {
    shared_ptr<pa_mainloop> mainloop;
    shared_ptr<pa_context> ctx;
    shared_ptr<pa_stream> rec_stream;
-   volatile bool should_run;
+   atomic<bool> should_run;
 
    int pipesource_module_idx;
    pa_operation *module_load_operation;
 
    Denoiser denoiser;
 
+  mutex mainloop_mutex;
+   void run();
    void connect();
    void run_mainloop();
    void poll_context();
@@ -73,8 +109,7 @@ class App {
    static void index_cb(pa_context *c, unsigned int idx, void *u);
 
    // Handle ctrl-c
-   static App *global_app;
-   static void signal_handler(int signal);
+   static PipeSourceVirtualMic *global_app;
 
    // utils
    static void free_pa_context(pa_context *ctx);

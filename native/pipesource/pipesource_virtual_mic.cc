@@ -11,21 +11,21 @@
 #include <fcntl.h>
 #include <unistd.h>
 
-#include "app.h"
+#include "pipesource_virtual_mic.h"
 
-App *App::global_app = nullptr;
+PipeSourceVirtualMic *PipeSourceVirtualMic::global_app = nullptr;
 using std::stringstream;
 
 // reference: https://github.com/gavv/snippets/blob/master/pa/pa_play_async_poll.c
 // That gives a pretty good way to structure. I'm making some changes to make it
 // a little more cpp imo
 
-App::App()
+PipeSourceVirtualMic::PipeSourceVirtualMic()
     : denoiser(
 	  "/home/gabe/code/audo/audo-ml/denoiser/realtime-w-hidden-test.ts"),
       pipesource_module_idx(-1), module_load_operation(nullptr),
-      state(InitContext) {
-  if (App::global_app) {
+      state(InitContext), action(NoAction), action_state(NoActionState) {
+  if (PipeSourceVirtualMic::global_app) {
     throw std::string("Only a single instance allowed!");
   }
 
@@ -33,20 +33,21 @@ App::App()
   write_idx = 0;
   read_idx = 0;
 
-  App::global_app = this;
-  signal(SIGINT, App::signal_handler);
+  should_run = true;
+
+  PipeSourceVirtualMic::global_app = this;
   mainloop = shared_ptr<pa_mainloop>(pa_mainloop_new(), pa_mainloop_free);
   connect();
-
-  should_run = true;
+  
+  async_thread = thread(&PipeSourceVirtualMic::run, this);
 }
 
-void App::changeState(State s) {
+void PipeSourceVirtualMic::changeState(State s) {
   std::cout << "Changin state from " << state << " to " << s << std::endl;
   state = s;
 }
 
-void App::connect() {
+void PipeSourceVirtualMic::connect() {
   ctx = shared_ptr<pa_context>(pa_context_new(pa_mainloop_get_api(mainloop.get()), client_name), free_pa_context);
   if (!ctx) {
     throw std::string( "pa_context_new failed");
@@ -61,11 +62,12 @@ void App::connect() {
   changeState(WaitContextReady);
 }
 
-void App::run() {
+void PipeSourceVirtualMic::run() {
   int err;
   bool swapped_file = false;
 
   while (should_run) {
+    lock_guard<mutex> lock(mainloop_mutex);
     if ((err = pa_mainloop_iterate(mainloop.get(), 0, NULL)) < 0) {
       stringstream ss;
       ss << "pa_mainloop_iterate: " << pa_strerror(err);
@@ -118,14 +120,13 @@ void App::run() {
 	  written /= sizeof(float);
 	  read_idx = (written + read_idx) % buffer_length;
         }
-	std::cout << written << " " << read_idx << " " << write_idx<< std::endl;
       }
       break;
     }
   }
 }
 
-void App::poll_context() {
+void PipeSourceVirtualMic::poll_context() {
   pa_context_state_t state = pa_context_get_state(ctx.get());
 
   switch  (state) {
@@ -149,7 +150,7 @@ void App::poll_context() {
   }
 }
 
-void App::poll_operation() {
+void PipeSourceVirtualMic::poll_operation() {
   if (!module_load_operation) {
     return;
   }
@@ -177,18 +178,18 @@ void App::poll_operation() {
   }
 }
 
-void App::load_pipesource_module() {
+void PipeSourceVirtualMic::load_pipesource_module() {
   pipe_file_name = "/tmp/virtmic";
-  module_load_operation = pa_context_load_module(ctx.get(), "module-pipe-source", "source_name=virtmic file=/tmp/virtmic format=float32le rate=16000 channels=1", App::index_cb, this);
+  module_load_operation = pa_context_load_module(ctx.get(), "module-pipe-source", "source_name=virtmic file=/tmp/virtmic format=float32le rate=16000 channels=1", PipeSourceVirtualMic::index_cb, this);
   changeState(WaitModuleReady);
 }
 
-void App::index_cb(pa_context *c, unsigned int idx, void *u) {
-  App *m = (App *)u;
+void PipeSourceVirtualMic::index_cb(pa_context *c, unsigned int idx, void *u) {
+  PipeSourceVirtualMic *m = (PipeSourceVirtualMic *)u;
   m->pipesource_module_idx = idx;
 }
 
-void App::start_recording_stream() {
+void PipeSourceVirtualMic::start_recording_stream() {
   // TODO: make this configurable
     pa_sample_spec sample_spec = {};
     sample_spec.format = PA_SAMPLE_FLOAT32LE;
@@ -210,7 +211,7 @@ void App::start_recording_stream() {
     }
     changeState(WaitRecStreamReady);
 }
-void App::poll_recording_stream() {
+void PipeSourceVirtualMic::poll_recording_stream() {
   pa_stream_state_t state = pa_stream_get_state(rec_stream.get());
 
   switch  (state) {
@@ -242,26 +243,16 @@ void App::poll_recording_stream() {
     return;
   }
 }
-void App::free_pa_context(pa_context *ctx) {
+void PipeSourceVirtualMic::free_pa_context(pa_context *ctx) {
   pa_context_disconnect(ctx);
   pa_context_unref(ctx);
 }
-void App::free_pa_stream(pa_stream *s) {
+void PipeSourceVirtualMic::free_pa_stream(pa_stream *s) {
   pa_stream_disconnect(s);
   pa_stream_unref(s);
 }
-
-void App::signal_handler(int signal) {
-  switch (signal) {
-  case SIGTERM:
-  case SIGINT:
-    std::cout << "Recieved signal, exiting";
-    App::global_app->should_run = false;
-    break;
-  }
-}
-
-App::~App() {
+PipeSourceVirtualMic::~PipeSourceVirtualMic() {
+  // TODO err is pretty ugly in here. shoudl fix that
   int err = 0;
 
   if (pipe_fd) {
@@ -270,6 +261,7 @@ App::~App() {
   if (err) {
     std::cerr << "Error closing pipe_fd: " << strerror(err) << std::endl;
   }
+  err = 0;
   delete buffer;
   if (-1 != pipesource_module_idx && ctx && PA_CONTEXT_READY == pa_context_get_state(ctx.get())) {
     // TODO make this use logger when I get that
@@ -281,6 +273,7 @@ App::~App() {
 	std::cerr << "Error: " << pa_strerror(err) << std::endl;
 	break;
       }
+      err = 0;
       switch (pa_operation_get_state(op)) {
       case PA_OPERATION_RUNNING:
 	continue;
@@ -289,11 +282,41 @@ App::~App() {
 	break;
       case PA_OPERATION_CANCELLED:
 	err = 1;
+	std::cerr << "Unload operation cancelled" << std::endl;
 	break;
       }
     }
     if (err) {
+      std::cerr << err << std::endl;
       std::cerr << "Error unloading module" << std::endl;
     }
   }
+}
+void PipeSourceVirtualMic::stop() {
+  //   lock_guard<mutex> lock(mainloop_mutex);
+  should_run = false;
+  async_thread.join();
+}
+void PipeSourceVirtualMic::getStatus(promise<bool> promise) {
+  lock_guard<mutex> lock(mainloop_mutex);
+  promise.set_value(state >= InitRecStream);
+}
+
+void PipeSourceVirtualMic::getMicrophones(promise<vector<pair<int, string>>> p) {
+  lock_guard<mutex> lock(mainloop_mutex);
+  if (state < InitRecStream) {
+    throw std::runtime_error("Not ready to get Microphones");
+  }
+  // TODO: we don't support multiple actions at a time yet
+  if (action != NoAction) {
+    throw std::runtime_error("Can only handle single action at a time");
+  }
+  action = GetMicrophones;
+  get_mics_promise = std::move(p);
+}
+void PipeSourceVirtualMic::setMicrophone(promise<void> p, int ind) {
+  return;
+}
+void PipeSourceVirtualMic::setRemoveNoise(promise<void> p, bool b) {
+  return;
 }
