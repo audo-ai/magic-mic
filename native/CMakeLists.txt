@@ -19,7 +19,12 @@ set_property(TARGET denoiser PROPERTY CXX_STANDARD 14)
 
 # Build Server
 add_executable(server server/main.cc)
+set_property(TARGET server PROPERTY CXX_STANDARD 17)
 target_include_directories(server PRIVATE common/)
+
+find_package(nlohmann_json 3.9.0 REQUIRED)
+# TODO Not sure why I can't link it PRIVATE
+target_link_libraries(server nlohmann_json::nlohmann_json)
 
 # Configure specifc virtmic engine
 if(${VIRTMIC_ENGINE} STREQUAL "PIPESOURCE")
