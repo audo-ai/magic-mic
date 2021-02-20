@@ -18,7 +18,7 @@ target_link_libraries(denoiser "${TORCH_LIBRARIES}")
 set_property(TARGET denoiser PROPERTY CXX_STANDARD 14)
 
 # Build Server
-add_executable(server server/main.cc)
+add_executable(server server/main.cc server/rpc.cc)
 set_property(TARGET server PROPERTY CXX_STANDARD 17)
 target_include_directories(server PRIVATE common/)
 
