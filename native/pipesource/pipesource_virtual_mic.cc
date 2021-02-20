@@ -13,7 +13,6 @@
 
 #include "pipesource_virtual_mic.h"
 
-PipeSourceVirtualMic *PipeSourceVirtualMic::global_app = nullptr;
 using std::stringstream;
 
 // reference: https://github.com/gavv/snippets/blob/master/pa/pa_play_async_poll.c
@@ -25,9 +24,6 @@ PipeSourceVirtualMic::PipeSourceVirtualMic()
 	  "/home/gabe/code/audo/audo-ml/denoiser/realtime-w-hidden-test.ts"),
       pipesource_module_idx(-1), module_load_operation(nullptr),
       state(InitContext), action(NoAction), action_state(NoActionState) {
-  if (PipeSourceVirtualMic::global_app) {
-    throw std::string("Only a single instance allowed!");
-  }
 
   buffer = new float[buffer_length];
   write_idx = 0;
@@ -35,13 +31,11 @@ PipeSourceVirtualMic::PipeSourceVirtualMic()
 
   should_run = true;
 
-  PipeSourceVirtualMic::global_app = this;
   mainloop = shared_ptr<pa_mainloop>(pa_mainloop_new(), pa_mainloop_free);
   connect();
   
   async_thread = thread(&PipeSourceVirtualMic::run, this);
 }
-
 void PipeSourceVirtualMic::changeState(State s) {
   std::cout << "Changin state from " << state << " to " << s << std::endl;
   state = s;

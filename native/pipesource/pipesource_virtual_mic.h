@@ -30,6 +30,8 @@ class PipeSourceVirtualMic : public VirtualMic {
  public:
   // TODO Need to implement copy constructors
   PipeSourceVirtualMic();
+  // threads aren't copyable, so neiter is this
+  PipeSourceVirtualMic(PipeSourceVirtualMic &) = delete;
   ~PipeSourceVirtualMic();
 
   void stop();
@@ -107,9 +109,6 @@ class PipeSourceVirtualMic : public VirtualMic {
    void poll_operation();
    void load_pipesource_module();
    static void index_cb(pa_context *c, unsigned int idx, void *u);
-
-   // Handle ctrl-c
-   static PipeSourceVirtualMic *global_app;
 
    // utils
    static void free_pa_context(pa_context *ctx);
