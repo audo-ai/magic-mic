@@ -9,6 +9,7 @@ using std::string;
 
 json make_error(int code, string message, optional<json> data = std::nullopt,
 		optional<string> id = std::nullopt);
+json make_response(string id, json result);
 enum RequestTypes { GetStatus, GetMicrophones, SetMicrophone, SetRemoveNoise };
 
 struct RPCRequest {

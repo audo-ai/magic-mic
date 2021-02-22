@@ -23,7 +23,7 @@ PipeSourceVirtualMic::PipeSourceVirtualMic()
     : denoiser(
 	  "/home/gabe/code/audo/audo-ml/denoiser/realtime-w-hidden-test.ts"),
       pipesource_module_idx(-1), module_load_operation(nullptr),
-      state(InitContext), action(NoAction), action_state(NoActionState) {
+      state(InitContext), cur_act() {
 
   buffer = new float[buffer_length];
   write_idx = 0;
@@ -37,7 +37,7 @@ PipeSourceVirtualMic::PipeSourceVirtualMic()
   async_thread = thread(&PipeSourceVirtualMic::run, this);
 }
 void PipeSourceVirtualMic::changeState(State s) {
-  std::cout << "Changin state from " << state << " to " << s << std::endl;
+  std::cerr << "Changin state from " << state << " to " << s << std::endl;
   state = s;
 }
 
@@ -89,37 +89,97 @@ void PipeSourceVirtualMic::run() {
       break;
     case Denoise:
       poll_recording_stream();
-      size_t spew_size;
-      if ((spew_size = denoiser.willspew())) {
-	size_t spewed = denoiser.spew(buffer + write_idx, buffer_length - write_idx);
-	write_idx = (write_idx + spewed) % buffer_length;
-
-
-	size_t to_write = write_idx - read_idx;
-	if (read_idx > write_idx) {
-	  to_write = buffer_length - read_idx;
-	}
-	ssize_t written = write(pipe_fd, buffer + read_idx, sizeof(float)*to_write);
-	if (written == -1) {
-	  switch (errno) {
-	  case EINTR:
-	  case EAGAIN:
-	    break;
-	  default:
-	    stringstream ss;
-	    ss << "pa_mainloop_iterate, write: " << strerror(errno);
-	    throw ss.str();
-          }
-	} else {
-	  written /= sizeof(float);
-	  read_idx = (written + read_idx) % buffer_length;
-        }
-      }
+      write_to_pipe();
+      break;
+    }
+    switch (cur_act.action) {
+    case CurrentAction::GetMicrophones:
+      get_microphones();
+      break;
+    case CurrentAction::SetMicrophone:
+      set_microphone();
+      break;
+    case CurrentAction::NoAction:
       break;
     }
   }
 }
+void PipeSourceVirtualMic::set_microphone() {
+  assert(cur_act.action == CurrentAction::SetMicrophone);
+  switch (cur_act.set_mic.state) {
+  case SetMicrophone::SetMicrophoneActionState::InitGettingSource:
+    cur_act.set_mic.op = pa_context_get_source_info_by_index(
+	ctx.get(), cur_act.set_mic.ind, source_info_cb, this);
+    cur_act.set_mic.state = SetMicrophone::SetMicrophoneActionState::WaitGettingSource;
+    break;
+  }
+}
+void PipeSourceVirtualMic::source_info_cb(pa_context *c, const pa_source_info *i, int eol, void *u) {
+  PipeSourceVirtualMic* m = (PipeSourceVirtualMic *)u;
+  switch (m->cur_act.action) {
+  case CurrentAction::SetMicrophone:
+    if (i) {
+      m->cur_act.set_mic.name = string(i->name);
+      m->source = m->cur_act.set_mic.name.c_str();
+      m->cur_act.set_mic.state = SetMicrophone::SetMicrophoneActionState::UpdatingStream;
+      m->state = State::InitRecStream;
+    } else if (m->cur_act.set_mic.state != SetMicrophone::SetMicrophoneActionState::UpdatingStream) {
+      // This cannot be the best way to do this
+      m->cur_act.action = CurrentAction::NoAction;
+      try {
+	throw std::runtime_error("Source not found");
+      } catch (...) {
+	m->cur_act.set_mic.p.set_exception(std::current_exception());
+      }
+    }
+    break;
+  case CurrentAction::GetMicrophones:
+    if (i) {
+      m->cur_act.get_mics.list.push_back(
+	  std::make_pair(i->index, string(i->name)));
+    } else {
+      m->cur_act.get_mics.p.set_value(m->cur_act.get_mics.list);
+      pa_operation_unref(m->cur_act.get_mics.op);
+      m->cur_act.get_mics.state =
+	  GetMicrophones::GetMicrophonesActionState::Done;
+      m->cur_act.action = CurrentAction::NoAction;
+    }
+    break;
+  }
+}
+void PipeSourceVirtualMic::get_microphones() {
+  assert(cur_act.action == CurrentAction::GetMicrophones);
+  switch (cur_act.get_mics.state) {
+  case GetMicrophones::GetMicrophonesActionState::Init:
+    cur_act.get_mics.op = pa_context_get_source_info_list(ctx.get(), source_info_cb, this);
+    cur_act.get_mics.state = GetMicrophones::GetMicrophonesActionState::Wait;
+    break;
+  }
+}
+void PipeSourceVirtualMic::write_to_pipe() {
+  size_t spew_size;
+  if ((spew_size = denoiser.willspew())) {
+    size_t spewed =
+	denoiser.spew(buffer, buffer_length);
 
+    ssize_t written =
+	write(pipe_fd, buffer, sizeof(float) * spewed);
+    if (written == -1) {
+      switch (errno) {
+      case EINTR:
+      case EAGAIN:
+	break;
+      default:
+	stringstream ss;
+	ss << "pa_mainloop_iterate, write: " << strerror(errno);
+	throw ss.str();
+      }
+    } else {
+      written /= sizeof(float);
+      read_idx = (written + read_idx) % buffer_length;
+    }
+  }
+}
 void PipeSourceVirtualMic::poll_context() {
   pa_context_state_t state = pa_context_get_state(ctx.get());
 
@@ -213,6 +273,10 @@ void PipeSourceVirtualMic::poll_recording_stream() {
     /* stream is writable, proceed now */
     if (this->state == WaitRecStreamReady) {
       changeState(Denoise);
+      if (cur_act.action == CurrentAction::SetMicrophone) {
+	cur_act.set_mic.p.set_value();
+	cur_act.action = CurrentAction::NoAction;
+      }
     }
     if (pa_stream_readable_size(rec_stream.get()) > 0) {
       const void *data;
@@ -291,26 +355,66 @@ void PipeSourceVirtualMic::stop() {
   should_run = false;
   async_thread.join();
 }
-void PipeSourceVirtualMic::getStatus(promise<bool> promise) {
+future<bool> PipeSourceVirtualMic::getStatus() {
   lock_guard<mutex> lock(mainloop_mutex);
-  promise.set_value(state >= InitRecStream);
+  promise<bool> p;
+  p.set_value(state >= InitRecStream);
+  return p.get_future();
 }
 
-void PipeSourceVirtualMic::getMicrophones(promise<vector<pair<int, string>>> p) {
+future<vector<pair<int, string>>> PipeSourceVirtualMic::getMicrophones() {
   lock_guard<mutex> lock(mainloop_mutex);
   if (state < InitRecStream) {
     throw std::runtime_error("Not ready to get Microphones");
   }
   // TODO: we don't support multiple actions at a time yet
-  if (action != NoAction) {
+  if (cur_act.action != CurrentAction::NoAction) {
     throw std::runtime_error("Can only handle single action at a time");
   }
-  action = GetMicrophones;
-  get_mics_promise = std::move(p);
+  cur_act.action = CurrentAction::GetMicrophones;
+  cur_act.get_mics = {.state =
+			  GetMicrophones::GetMicrophonesActionState::Init,
+		      .p = promise<vector<pair<int, string>>>()};
+  return cur_act.get_mics.p.get_future();
 }
-void PipeSourceVirtualMic::setMicrophone(promise<void> p, int ind) {
-  return;
+future<void> PipeSourceVirtualMic::setMicrophone(int ind) {
+  lock_guard<mutex> lock(mainloop_mutex);
+  if (state < InitRecStream) {
+    throw std::runtime_error("Not ready to get Microphones");
+  }
+  // TODO: we don't support multiple actions at a time yet
+  if (cur_act.action != CurrentAction::NoAction) {
+    throw std::runtime_error("Can only handle single action at a time");
+  }
+  cur_act.action = CurrentAction::SetMicrophone;
+  cur_act.set_mic = {.state = SetMicrophone::SetMicrophoneActionState::InitGettingSource,
+		     .ind = ind,
+                     .p = promise<void>()};
+  return cur_act.set_mic.p.get_future();
 }
-void PipeSourceVirtualMic::setRemoveNoise(promise<void> p, bool b) {
-  return;
+future<void> PipeSourceVirtualMic::setRemoveNoise(bool b) {
+  lock_guard<mutex> lock(mainloop_mutex);
+  denoiser.should_denoise = b;
+
+  promise<void> p;
+  p.set_value();
+  return p.get_future();
+}
+void PipeSourceVirtualMic::abortLastRequest() {
+  lock_guard<mutex> lock(mainloop_mutex);
+  switch (cur_act.action) {
+  case CurrentAction::NoAction:
+    break;
+  case CurrentAction::GetMicrophones:
+    if (cur_act.get_mics.state ==
+	GetMicrophones::GetMicrophonesActionState::Wait) {
+      pa_operation_cancel(cur_act.get_mics.op);
+      pa_operation_unref(cur_act.get_mics.op);
+    }
+    break;
+  case CurrentAction::SetMicrophone:
+    std::cerr << "Not yet implemetned" << std::endl;
+    break;
+  }
+  cur_act.action = CurrentAction::NoAction;
 }
