@@ -1,7 +1,13 @@
 #include <csignal>
+#include <future>
 #include <iostream>
 #include <sstream>
 #include <thread>
+#include <string>
+#include <vector>
+#include <utility>
+#include <exception>
+#include <chrono>
 
 #include <errno.h>
 #include <fcntl.h>
@@ -20,12 +26,18 @@ typedef PipeSourceVirtualMic ConcreteVirtualMic;
 
 #include "rpc.h"
 
+using std::pair;
+using std::promise;
+using std::string;
 using std::stringstream;
+using std::vector;
 using json = nlohmann::json;
 
 static bool running = true;
+constexpr char delim = '\n';
+
 void handle_signal(int sig) {
-  std::cout << "Signal Recived" << std::endl;
+  std::cerr << "Signal Recived" << std::endl;
   switch (sig) {
   case SIGTERM:
   case SIGINT:
@@ -33,11 +45,56 @@ void handle_signal(int sig) {
     break;
   }
 }
-constexpr char delim = '\n';
+struct interrupted_error : public std::exception {};
+
+template <typename T>
+void wait_on_future(future<T> &f) {
+  while (running) {
+    if (std::future_status::ready == f.wait_for(std::chrono::milliseconds(100))) {
+      return;
+    }
+  }
+  throw interrupted_error();
+}
+json handle_request(ConcreteVirtualMic *mic, RPCRequest req) {
+  switch (req.type) {
+  case GetStatus: {
+    future<bool> f = mic->getStatus();
+    f.wait();
+    return make_response(req.id, f.get());
+  }
+  case GetMicrophones: {
+    future<vector<pair<int, string>>> f = mic->getMicrophones();
+    try {
+      wait_on_future<vector<pair<int, string>>>(f);
+    } catch(interrupted_error &e) {
+      return make_error(-32000, "Server error", "Interrupted while waiting for response");
+    }
+    json resp = json::basic_json::array({});
+    for (auto &tuple : f.get()) {
+      resp.push_back({{"id", std::get<0>(tuple)}, {"name", std::get<1>(tuple)}});
+    }
+    return make_response(req.id, resp);
+  }
+  case SetMicrophone: {
+    future<void> f = mic->setMicrophone(req.mic_id);
+    f.wait();
+    return make_response(req.id, {});
+  }
+  case SetRemoveNoise: {
+    future f = mic->setRemoveNoise(req.should_remove_noise);
+    f.wait();
+    return make_response(req.id, {});
+  }
+  default:
+    throw std::runtime_error("Unknown request enountered in handle_request");
+  }
+}
+
 int main() {
   signal(SIGINT, handle_signal);
-  std::cout << "Starting " << VIRTUAL_MIC_NAME << " virtual mic" << std::endl;
-  // ConcreteVirtualMic mic;
+  std::cerr << "Starting " << VIRTUAL_MIC_NAME << " virtual mic" << std::endl;
+  ConcreteVirtualMic mic;
   fcntl(STDIN_FILENO, F_SETFL, O_NONBLOCK);
 
   stringstream ss;
@@ -61,26 +118,20 @@ int main() {
     }
 
     if (FD_ISSET(STDIN_FILENO, &rfds)) {
-      char line[1024] = {};
       char c;
-      // long read_in = read(STDIN_FILENO, line, sizeof(line));
       while (1 == read(STDIN_FILENO, &c, 1)) {
-	// Making the assumption that the last read char of a block will always
-	// be the delimiter. This is valid with a newline delimilter in an
-	// interactive terminal, but not necessarily with an arbitrary
-	// delimmiter on a non terminal. For that, it would probably be best to
-	// read char by char
 	if (c == delim) {
-	  json j;
-	  ss << line;
 	  try {
+	    // ahhh c++, you never cease to disappoint. Appearantly declare j
+	    // outside of the try leads to horrible random jumps. Why?
+	    json j;
 	    ss >> j;
 	    RPCRequest req = parse_request(j);
-	    std::cerr << "Handling: " << req.type << std::endl;
+	    std::cout << handle_request(&mic,req) << delim;
 	  } catch (nlohmann::detail::parse_error &ex) {
 	    std::cout << make_error(-32700, "Parse error") << std::endl;
 	  } catch (json err) {
-	    std::cout << err << std::endl;
+	    std::cout << err << delim;
 	  }
 	  ss.str("");
         } else {
@@ -89,6 +140,6 @@ int main() {
       }
     }
   }
-  // mic.stop();
+  mic.stop();
   return 0;
 }

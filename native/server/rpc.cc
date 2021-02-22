@@ -50,7 +50,14 @@ json make_error(int code, string message, optional<json> data,
     out["id"] = nullptr;
   }
   if (data) {
-    out["data"] = data.value();
+    out["error"]["data"] = data.value();
   }
+  return out;
+}
+json make_response(string id, json result) {
+  json out;
+  out["jsonrpc"] = "2.0";
+  out["id"] = id;
+  out["result"] = result;
   return out;
 }

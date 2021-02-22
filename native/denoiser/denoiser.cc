@@ -31,6 +31,9 @@ void Denoiser::feed(float *arr, std::size_t size) {
   std.feed(arr, size);
 }
 std::size_t Denoiser::willspew() {
+  if (!should_denoise) {
+    return in.size();
+  }
   // I can't figure out a good way to calculate this
   int written = 0;
   while (in.size() - written >= valid_length) {
@@ -40,23 +43,36 @@ std::size_t Denoiser::willspew() {
 }
 std::size_t Denoiser::spew(float *out, std::size_t maxsize) {
   int written = 0;
-  while (written + hop_size <= maxsize && (in.size() - written) >= valid_length) {
-    torch::Tensor audio = torch::from_blob((float *)in.data() + written, valid_length, options);
-    audio /= std.std();
-    audio = audio.view(c10::IntArrayRef({1,1,valid_length}));
-    torch::jit::IValue model_out = module.forward(std::vector<torch::IValue>({torch::jit::IValue(audio), torch::jit::IValue(conv_hidden), torch::jit::IValue(lstm_hidden)}));
+  if (!should_denoise) {
+    written = maxsize;
+    if (written > in.size()) {
+      written = in.size();
+    }
+    std::copy(in.data(), in.data() + written, out);
+  } else {
+    while (written + hop_size <= maxsize &&
+	   (in.size() - written) >= valid_length) {
+      torch::Tensor audio =
+	  torch::from_blob((float *)in.data() + written, valid_length, options);
+      audio /= std.std();
+      audio = audio.view(c10::IntArrayRef({1, 1, valid_length}));
+      torch::jit::IValue model_out = module.forward(std::vector<torch::IValue>(
+	  {torch::jit::IValue(audio), torch::jit::IValue(conv_hidden),
+	   torch::jit::IValue(lstm_hidden)}));
 
-    assert(model_out.isTuple());
-    auto tuple = model_out.toTuple();
-    auto clean = tuple->elements()[0].toTensor();
-    clean *= std.std();
-    conv_hidden = tuple->elements()[1].toTensorList();
-    lstm_hidden = tuple->elements()[2].toTensor();
+      assert(model_out.isTuple());
+      auto tuple = model_out.toTuple();
+      auto clean = tuple->elements()[0].toTensor();
+      clean *= std.std();
+      conv_hidden = tuple->elements()[1].toTensorList();
+      lstm_hidden = tuple->elements()[2].toTensor();
 
-    clean = clean.contiguous();
-    assert(clean.numel() == hop_size);
-    std::copy(clean.data_ptr<float>(), clean.data_ptr<float>() + hop_size, out+written);
-    written += hop_size;
+      clean = clean.contiguous();
+      assert(clean.numel() == hop_size);
+      std::copy(clean.data_ptr<float>(), clean.data_ptr<float>() + hop_size,
+                out + written);
+      written += hop_size;
+    }
   }
   if (written) {
     in.erase(in.begin(), in.begin() + written);

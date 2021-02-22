@@ -65,7 +65,7 @@ Get's available microphones to listen on
 ```json
 {
 	"jsonrpc": "2.0",
-	"result": true,
+	"result": ...,
 	"id": "exampleid"
 }
 ```

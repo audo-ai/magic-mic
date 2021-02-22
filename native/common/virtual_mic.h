@@ -5,7 +5,7 @@
 #include <utility>
 #include <future>
 
-using std::promise;
+using std::future;
 using std::pair;
 using std::string;
 using std::vector;
@@ -16,8 +16,9 @@ using std::vector;
 class VirtualMic {
 public:
   virtual void stop() = 0;
-  virtual void getStatus(promise<bool>) = 0;
-  virtual void getMicrophones(promise<vector<pair<int, string>>>) = 0;
-  virtual void setMicrophone(promise<void>, int) = 0;
-  virtual void setRemoveNoise(promise<void>, bool) = 0;
+  virtual void abortLastRequest() = 0;
+  virtual future<bool> getStatus() = 0;
+  virtual future<vector<pair<int, string>>> getMicrophones() = 0;
+  virtual future<void> setMicrophone(int) = 0;
+  virtual future<void> setRemoveNoise(bool) = 0;
 };

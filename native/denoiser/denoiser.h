@@ -19,7 +19,9 @@ class Denoiser {
   // less than or equal to maxsize so maxsize must be greater than min_spew
   std::size_t spew(float *out, std::size_t maxsize);
   std::size_t get_size_multiple();
-  
+
+  bool should_denoise = true;
+
   const int min_spew = hop_size;
 
  private:
