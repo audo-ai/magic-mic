@@ -1,8 +1,3 @@
-cmake_minimum_required(VERSION 3.10)
-
-# set the project name
-project(magic-mic)
-
 # Configure module
 set(BUILD_MODULE OFF CACHE BOOL "should we build module")
 set(PULSEAUDIO_SOURCE_TREE "" CACHE PATH "path to the pulse audio source tree")
