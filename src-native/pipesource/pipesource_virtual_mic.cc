@@ -34,6 +34,7 @@ PipeSourceVirtualMic::PipeSourceVirtualMic()
   mainloop = shared_ptr<pa_mainloop>(pa_mainloop_new(), pa_mainloop_free);
   connect();
   
+  exception_promise = promise<std::exception_ptr>();
   async_thread = thread(&PipeSourceVirtualMic::run, this);
 }
 void PipeSourceVirtualMic::changeState(State s) {
@@ -44,14 +45,14 @@ void PipeSourceVirtualMic::changeState(State s) {
 void PipeSourceVirtualMic::connect() {
   ctx = shared_ptr<pa_context>(pa_context_new(pa_mainloop_get_api(mainloop.get()), client_name), free_pa_context);
   if (!ctx) {
-    throw std::string( "pa_context_new failed");
+    throw std::runtime_error( "pa_context_new failed");
   }
 
   int err = pa_context_connect(ctx.get(), nullptr, (pa_context_flags)0, nullptr);
   if (err) {
     stringstream ss;
     ss << "pa_context_connect failed: " << pa_strerror(err);
-    throw ss.str();
+    throw std::runtime_error(ss.str());
   }
   changeState(WaitContextReady);
 }
@@ -60,20 +61,27 @@ void PipeSourceVirtualMic::run() {
   int err;
   bool swapped_file = false;
 
+  try {
   while (should_run) {
     lock_guard<mutex> lock(mainloop_mutex);
     if ((err = pa_mainloop_iterate(mainloop.get(), 0, NULL)) < 0) {
       stringstream ss;
       ss << "pa_mainloop_iterate: " << pa_strerror(err);
-      throw ss.str();
+      throw std::runtime_error(ss.str());
     }
     // TODO figure out a way to respond to state changes. maybe do this along
     // side of switching over to a state bitfield
     switch (state) {
     case InitContext:
-      throw std::string("Context should have been inited already");
+      throw std::runtime_error("Context should have been inited already");
     case WaitContextReady:
       poll_context();
+      break;
+    case InitCheckModuleLoaded:
+      check_module_loaded();
+      break;
+    case WaitCheckModuleLoaded:
+      poll_operation();
       break;
     case InitModule:
       load_pipesource_module();
@@ -103,6 +111,24 @@ void PipeSourceVirtualMic::run() {
       break;
     }
   }
+  } catch (...) {
+    exception_promise.set_value(std::current_exception());
+  }
+}
+void PipeSourceVirtualMic::module_info_cb(pa_context *c, const pa_module_info *i, int eol, void *u) {
+  PipeSourceVirtualMic *m = (PipeSourceVirtualMic *)u;
+  if (!i || m->state != WaitCheckModuleLoaded) {
+    return;
+  }
+  if (string(i->name) == "module-pipe-source") {
+    // We should try to derive this from the actual module if possible
+    m->pipe_file_name = "/tmp/virtmic";
+    m->pipesource_module_idx = i->index;
+  }
+}
+void PipeSourceVirtualMic::check_module_loaded() {
+  module_load_operation = pa_context_get_module_info_list(ctx.get(), module_info_cb, this);
+  changeState(WaitCheckModuleLoaded);
 }
 void PipeSourceVirtualMic::set_microphone() {
   assert(cur_act.action == CurrentAction::SetMicrophone);
@@ -172,7 +198,7 @@ void PipeSourceVirtualMic::write_to_pipe() {
       default:
 	stringstream ss;
 	ss << "pa_mainloop_iterate, write: " << strerror(errno);
-	throw ss.str();
+	throw std::runtime_error(ss.str());
       }
     } else {
       written /= sizeof(float);
@@ -187,7 +213,7 @@ void PipeSourceVirtualMic::poll_context() {
   case PA_CONTEXT_READY:
     /* context connected to server, */
     if (this->state == WaitContextReady) {
-      changeState(InitModule);
+      changeState(InitCheckModuleLoaded);
     } else {
       // TODO when I get logging setup log something here because it shouldn't
       // really happen
@@ -197,7 +223,7 @@ void PipeSourceVirtualMic::poll_context() {
   case PA_CONTEXT_FAILED:
   case PA_CONTEXT_TERMINATED:
     /* context connection failed */
-    throw std::string( "failed to connect to pulseaudio context!");
+    throw std::runtime_error( "failed to connect to pulseaudio context!");
   default:
     /* nothing interesting */
     break;
@@ -205,18 +231,19 @@ void PipeSourceVirtualMic::poll_context() {
 }
 
 void PipeSourceVirtualMic::poll_operation() {
-  if (!module_load_operation) {
-    return;
-  }
+  assert(module_load_operation);
+
   switch(pa_operation_get_state(module_load_operation)) {
   case PA_OPERATION_CANCELLED:
-    throw std::string("module_load_operation cancelled!");
+    throw std::runtime_error("module_load_operation cancelled!");
   case PA_OPERATION_DONE:
-    if (-1 == pipesource_module_idx) {
-      throw std::string("Failed to load module-pipesource");
+    pa_operation_unref(module_load_operation);
+    module_load_operation = nullptr;
+    if (-1 == pipesource_module_idx && state == WaitModuleReady) {
+      throw std::runtime_error("Failed to load module-pipesource");
+    } else if (pipesource_module_idx == -1) {
+      changeState(InitModule);
     } else {
-      pa_operation_unref(module_load_operation);
-
       changeState(InitRecStream);
 
       // Not sure how O_APPEND works on pipes, but shouldn't hurt
@@ -224,7 +251,7 @@ void PipeSourceVirtualMic::poll_operation() {
       if (-1 == pipe_fd) {
 	stringstream ss;
 	ss << "Failed to open file \"" << pipe_file_name << "\" (" << strerror(errno) << ")";
-        throw ss.str();
+        throw std::runtime_error(ss.str());
       }
     }
   default:
@@ -234,12 +261,21 @@ void PipeSourceVirtualMic::poll_operation() {
 
 void PipeSourceVirtualMic::load_pipesource_module() {
   pipe_file_name = "/tmp/virtmic";
-  module_load_operation = pa_context_load_module(ctx.get(), "module-pipe-source", "source_name=virtmic file=/tmp/virtmic format=float32le rate=16000 channels=1", PipeSourceVirtualMic::index_cb, this);
+  module_load_operation =
+      pa_context_load_module(ctx.get(), "module-pipe-source",
+                             "source_name=virtmic "
+                             "file=/tmp/virtmic "
+                             "format=float32le "
+			     "rate=16000 "
+                             "channels=1 "
+			     "source_properties=\"device.description='testmic'\"",
+			     PipeSourceVirtualMic::index_cb, this);
   changeState(WaitModuleReady);
 }
 
 void PipeSourceVirtualMic::index_cb(pa_context *c, unsigned int idx, void *u) {
   PipeSourceVirtualMic *m = (PipeSourceVirtualMic *)u;
+  std::cerr << "Module loaded: " << idx << std::endl;
   m->pipesource_module_idx = idx;
 }
 
@@ -254,14 +290,14 @@ void PipeSourceVirtualMic::start_recording_stream() {
     if (!rec_stream) {
       stringstream ss;
       ss << "pa_stream_new failed: " << pa_strerror(pa_context_errno(ctx.get()));
-      throw ss.str();
+      throw std::runtime_error(ss.str());
     }
 
     int err = pa_stream_connect_record(rec_stream.get(), source, nullptr, (pa_stream_flags)0);
     if (err != 0) {
       stringstream ss;
       ss << "pa_stream_connect_record: " << pa_strerror(err);
-      throw ss.str();
+      throw std::runtime_error(ss.str());
     }
     changeState(WaitRecStreamReady);
 }
@@ -285,7 +321,7 @@ void PipeSourceVirtualMic::poll_recording_stream() {
       if (err) {
 	stringstream ss;
 	ss << "pa_stream_peak: " << pa_strerror(err);
-	throw ss.str();
+	throw std::runtime_error(ss.str());
       }
       denoiser.feed((float *)data, nbytes/4);
       pa_stream_drop(rec_stream.get());
@@ -295,7 +331,7 @@ void PipeSourceVirtualMic::poll_recording_stream() {
   case PA_STREAM_FAILED:
   case PA_STREAM_TERMINATED:
     /* stream is closed, exit */
-    throw std::string("recording_stream closed unexpectedly");
+    throw std::runtime_error("recording_stream closed unexpectedly");
   default:
     /* stream is not ready yet */
     return;
