@@ -95,10 +95,15 @@ int main() {
   signal(SIGINT, handle_signal);
   std::cerr << "Starting " << VIRTUAL_MIC_NAME << " virtual mic" << std::endl;
   ConcreteVirtualMic mic;
+  auto err_fut = mic.get_exception_future();
   fcntl(STDIN_FILENO, F_SETFL, O_NONBLOCK);
 
   stringstream ss;
   while (running) {
+    if (std::future_status::ready == err_fut.wait_for(std::chrono::milliseconds(0))) {
+      std::rethrow_exception(err_fut.get());
+    }
+
     fd_set rfds;
     struct timespec tv;
     sigset_t mask;

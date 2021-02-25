@@ -21,4 +21,6 @@ public:
   virtual future<vector<pair<int, string>>> getMicrophones() = 0;
   virtual future<void> setMicrophone(int) = 0;
   virtual future<void> setRemoveNoise(bool) = 0;
+
+  virtual future<std::exception_ptr> get_exception_future() = 0;
 };

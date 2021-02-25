@@ -42,8 +42,11 @@ public:
   future<vector<pair<int, string>>> getMicrophones() override;
   future<void> setMicrophone(int) override;
   future<void> setRemoveNoise(bool) override;
-
+  future<std::exception_ptr> get_exception_future() override {
+    return exception_promise.get_future();
+  };
 private:
+  promise<std::exception_ptr> exception_promise;
   thread async_thread;
   struct GetMicrophones {
     enum GetMicrophonesActionState { Init, Wait, Done };
@@ -84,6 +87,8 @@ private:
   enum State {
     InitContext = 1,
     WaitContextReady,
+    InitCheckModuleLoaded,
+    WaitCheckModuleLoaded,
     InitModule,
     WaitModuleReady,
     InitRecStream,
@@ -136,6 +141,7 @@ private:
   void start_recording_stream();
   void poll_recording_stream();
   void poll_operation();
+  void check_module_loaded();
   void load_pipesource_module();
   void write_to_pipe();
   static void index_cb(pa_context *c, unsigned int idx, void *u);
@@ -143,6 +149,7 @@ private:
   void set_microphone();
   void get_microphones();
   static void source_info_cb(pa_context *c, const pa_source_info *i, int eol, void *u);
+  static void module_info_cb(pa_context *c, const pa_module_info *i, int eol, void *u);
   static void get_mics_cb();
 
   // utils
