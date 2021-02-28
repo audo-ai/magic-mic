@@ -6,6 +6,7 @@ thumbs.db
 .idea/
 native_build/
 yarn-error.log
+.dir-locals.el
 .dir-local.el
 .#*
 .cache
