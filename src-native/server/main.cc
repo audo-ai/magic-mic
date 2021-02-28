@@ -12,6 +12,8 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <sys/select.h>
+#include <sys/socket.h>
+#include <sys/un.h>
 #include <unistd.h>
 
 #include <nlohmann/json.hpp>
@@ -90,13 +92,57 @@ json handle_request(ConcreteVirtualMic *mic, RPCRequest req) {
     throw std::runtime_error("Unknown request enountered in handle_request");
   }
 }
+void write_json(int fd, json j) {
+  string str = j.dump();
+  str.push_back('\n');
+  const char *c_str = str.c_str();
+  int length = 0;
+  while (length != str.length()) {
+    ssize_t s = write(fd, c_str + length, str.length() - length);
+    if (s == -1) {
+      throw std::runtime_error(strerror(errno));
+    }
+    length += s;
+  }
+}
+int main(int argc, char **argv) {
+  if (argc != 2) {
+    std::cerr << "USAGE: " << argv[0] << " SOCK_PATH" << std::endl;
+    return 1;
+  }
 
-int main() {
+  int serv_fd = socket(AF_UNIX, SOCK_STREAM, 0);
+  if (!serv_fd) {
+    perror("socket");
+    exit(1);
+  }
+  struct sockaddr_un addr;
+  memset(&addr, 0, sizeof(addr));
+  addr.sun_family = AF_UNIX;
+  strcpy(addr.sun_path, argv[1]);
+
+  // A little scary...
+  unlink(argv[1]);
+  if (-1 == bind(serv_fd, (const struct sockaddr*)&addr, sizeof(addr))) {
+    perror("bind");
+    return 1;
+  }
+  if (listen(serv_fd, 1)) {
+    perror("Listen");
+    return 1;
+  }
+
+  int sock_fd;
+  if (-1 == (sock_fd = accept(serv_fd, nullptr, nullptr))) {
+    perror("accept");
+    return 1;
+  }
+  fcntl(sock_fd, F_SETFL, O_NONBLOCK);
+
   signal(SIGINT, handle_signal);
   std::cerr << "Starting " << VIRTUAL_MIC_NAME << " virtual mic" << std::endl;
   ConcreteVirtualMic mic;
   auto err_fut = mic.get_exception_future();
-  fcntl(STDIN_FILENO, F_SETFL, O_NONBLOCK);
 
   stringstream ss;
   while (running) {
@@ -109,22 +155,23 @@ int main() {
     sigset_t mask;
     int ret;
     FD_ZERO(&rfds);
-    FD_SET(STDIN_FILENO, &rfds);
+    FD_SET(sock_fd, &rfds);
     tv.tv_sec = 1;
     tv.tv_nsec = 0;
     sigemptyset(&mask);
     sigaddset(&mask, SIGINT);
     sigaddset(&mask, SIGTERM);
 
-    ret = pselect(STDIN_FILENO + 1, &rfds, nullptr, nullptr, &tv, &mask);
+    ret = pselect(sock_fd + 1, &rfds, nullptr, nullptr, &tv, &mask);
     if (ret == -1) {
       std::cerr << "pselect error: " << strerror(errno) << std::endl;
       running = false;
     }
 
-    if (FD_ISSET(STDIN_FILENO, &rfds)) {
+    if (FD_ISSET(sock_fd, &rfds)) {
       char c;
-      while (1 == read(STDIN_FILENO, &c, 1)) {
+      int r;
+      while (1 == (r = read(sock_fd, &c, 1))) {
 	if (c == delim) {
 	  try {
 	    // ahhh c++, you never cease to disappoint. Appearantly declare j
@@ -132,17 +179,18 @@ int main() {
 	    json j;
 	    ss >> j;
 	    RPCRequest req = parse_request(j);
-	    std::cout << handle_request(&mic,req) << delim;
+	    write_json(sock_fd, handle_request(&mic,req));
 	  } catch (nlohmann::detail::parse_error &ex) {
-	    std::cout << make_error(-32700, "Parse error") << std::endl;
+	    write_json(sock_fd, make_error(-32700, "Parse error"));
 	  } catch (json err) {
-	    std::cout << err << delim;
+	    write_json(sock_fd, err);
 	  }
 	  ss.str("");
         } else {
           ss << c;
         }
       }
+      if (r == 0) { break; }
     }
   }
   mic.stop();
