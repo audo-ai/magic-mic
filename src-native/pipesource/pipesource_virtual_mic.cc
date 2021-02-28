@@ -160,9 +160,9 @@ void PipeSourceVirtualMic::source_info_cb(pa_context *c, const pa_source_info *i
     }
     break;
   case CurrentAction::GetMicrophones:
-    if (i) {
+    if (i && string(i->name) != "virtmic") {
       m->cur_act.get_mics.list.push_back(
-	  std::make_pair(i->index, string(i->name)));
+	  std::make_pair(i->index, string(i->description)));
     } else {
       m->cur_act.get_mics.p.set_value(m->cur_act.get_mics.list);
       pa_operation_unref(m->cur_act.get_mics.op);
@@ -268,7 +268,7 @@ void PipeSourceVirtualMic::load_pipesource_module() {
                              "format=float32le "
 			     "rate=16000 "
                              "channels=1 "
-			     "source_properties=\"device.description='testmic'\"",
+			     "source_properties=\"device.description='Magic Mic'\"",
 			     PipeSourceVirtualMic::index_cb, this);
   changeState(WaitModuleReady);
 }
