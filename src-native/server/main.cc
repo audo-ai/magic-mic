@@ -111,30 +111,18 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  int serv_fd = socket(AF_UNIX, SOCK_STREAM, 0);
-  if (!serv_fd) {
+  int sock_fd = socket(AF_UNIX, SOCK_STREAM, 0);
+  if (!sock_fd) {
     perror("socket");
-    exit(1);
+    return 1;
   }
   struct sockaddr_un addr;
   memset(&addr, 0, sizeof(addr));
   addr.sun_family = AF_UNIX;
   strcpy(addr.sun_path, argv[1]);
 
-  // A little scary...
-  unlink(argv[1]);
-  if (-1 == bind(serv_fd, (const struct sockaddr*)&addr, sizeof(addr))) {
-    perror("bind");
-    return 1;
-  }
-  if (listen(serv_fd, 1)) {
-    perror("Listen");
-    return 1;
-  }
-
-  int sock_fd;
-  if (-1 == (sock_fd = accept(serv_fd, nullptr, nullptr))) {
-    perror("accept");
+  if (-1 == connect(sock_fd, (sockaddr *)&addr, sizeof(addr))) {
+    perror("connect");
     return 1;
   }
   fcntl(sock_fd, F_SETFL, O_NONBLOCK);

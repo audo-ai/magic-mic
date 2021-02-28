@@ -9,13 +9,14 @@ use std::{
   env,
   process::{
     Command,
-    Child,
     Stdio
   },
   thread,
   sync::mpsc,
-  os::unix::net::UnixStream,
-  time::Duration,
+  os::unix::net::{
+    UnixListener
+  },
+  fs::*
 };
 use tauri::api::*;
 use anyhow;
@@ -44,13 +45,13 @@ fn get_message<R: Read>(r: &mut R) -> JSONRpcResp {
 fn rxtx_server<T: Read + Write>(server: &mut T, req: JSONRpcReq) -> JSONRpcResp {
   let r = serde_json::to_string(&req).unwrap();
   println!("Server request: {}", serde_json::to_string(&r).unwrap());
-  server.write(&r.as_bytes());
-  server.write(b"\n");
+  server.write(&r.as_bytes()).expect("Failed to write to server");
+  server.write(b"\n").expect("Failed to write to server");
   let r = get_message(server);
   println!("Server response: {}", serde_json::to_string(&r).unwrap());
   return r
 }
-fn server_thread<T: Read + Write>(mut server: T, tx: mpsc::Sender<()>, rx: mpsc::Receiver<(tauri::WebviewMut, Cmd)>) -> () {
+fn server_thread<T: Read + Write>(mut server: T, rx: mpsc::Receiver<(tauri::WebviewMut, Cmd)>) -> () {
   loop {
     if let Ok((mut _webview, event)) = rx.recv() {
       match event {
@@ -138,11 +139,6 @@ fn server_thread<T: Read + Write>(mut server: T, tx: mpsc::Sender<()>, rx: mpsc:
 		tauri::execute_promise_sync(wv, move|| Ok(e), callback, error);
 	      });
 	    }
-	    _ => {
-	      _webview.dispatch(move|wv| {
-		tauri::execute_promise_sync(wv, move|| Ok(String::from("Unknown error")), callback, error);
-	      });
-	    }
 	  };
 	},
 	Cmd::Exit => {
@@ -166,7 +162,13 @@ fn main() {
   let mut sock_path = tauri::api::path::runtime_dir().expect("get runtime dir");
   sock_path.push("magic-mic.socket");
 
-  let child = Command::new(server_path)
+
+  if metadata(sock_path.clone().into_os_string()).is_ok() {
+    remove_file(sock_path.clone().into_os_string()).expect("Failed to remove socket path, maybe permissions?");
+  }
+  let listener = UnixListener::bind(sock_path.clone().into_os_string()).expect("Couldn't bind to unix socket");
+
+  Command::new(server_path)
     .arg(sock_path.clone().into_os_string())
     .stdin(Stdio::piped())
     .stdout(Stdio::piped())
@@ -174,14 +176,10 @@ fn main() {
     .spawn()
     .expect("spawn server process");
 
-  // Race condition between socket creation and connect, maybe we should create it here?
-  thread::sleep(Duration::from_millis(500));
-
-  let mut stream = UnixStream::connect(sock_path).expect("connect to child created socket");
+  let stream = listener.incoming().next().expect("Couldn't listen on socket").expect("Child failed to connect to socket");
 
   let (to_server, from_main) = mpsc::channel();
-  let (to_main, from_server) = mpsc::channel();
-  thread::spawn(|| { server_thread(stream, to_main, from_main) });
+  thread::spawn(|| { server_thread(stream, from_main) });
 
   tauri::AppBuilder::new()
     .invoke_handler(move |_webview, arg| {
