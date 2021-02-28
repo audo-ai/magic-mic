@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 
+import { promisified } from 'tauri/api/tauri'
+import { listen } from 'tauri/api/event'
+
 import './main.scss';
 import './device_selector.scss';
 import './select.scss';
@@ -24,12 +27,28 @@ const SelectWithImage = ({options, image, chosen, setChosen}) => {
 	       </label>
 	   </div>;
 }
-const DeviceSelector = ({title, icon, devices}) => {
+const DeviceSelector = ({title, icon, devices, switchToDevice}) => {
+    let map = [];
+    for (let i =0; i < devices.length; i++) {
+	map[devices[i].name] = devices[i].id;
+    }
     const [device, setDevice] = useState();
     const [remove, setRemove] = useState(false);
+    useEffect(() => {
+	promisified({cmd: "setShouldRemoveNoise", value: remove})
+	    .then((v) => console.log(JSON.stringify(v)))
+	    .catch((v) => console.log(JSON.stringify(v)));
+    }, [remove]);
     return <div className="device-selector">
 	       <h1> {title} </h1>
-	       <SelectWithImage options={devices} image={icon} chosen={device} setChosen={setDevice}/>
+	       <SelectWithImage options={devices.map((e) => e.name)}
+				image={icon}
+				chosen={device}
+				setChosen={(v) => {
+				    switchToDevice(map[v])
+					.then(console.log)
+					.catch(console.error);
+				}}/>
 	       <div className="remove-noise">
 		   <label className="text"> Remove Noise </label>
 		   <label className="switch">
@@ -41,10 +60,27 @@ const DeviceSelector = ({title, icon, devices}) => {
 }
 
 const App = () => {
+    const [devices, setDevices] = useState([]);
+    useEffect(() => {
+	setInterval(() => {
+	    promisified({cmd: "getStatus"})
+		.then((v) => console.log(JSON.stringify(v)))
+		.catch((v) => console.log(JSON.stringify(v)));
+	}, 10000);
+    }, []);
+    useEffect(() => {
+	promisified({cmd: "getMicrophones"})
+	    .then((v) => {
+		setDevices(v);
+		console.log(JSON.stringify(v))
+	    })
+	    .catch((v) => console.log(JSON.stringify(v)));
+    }, []);
+
     return <div id="main-container">
 	       <img id="logo" src={logo} />
-	       <DeviceSelector title="Microphone" icon={mic} devices={["Microphone - System Default"]} />
-	       <DeviceSelector title="Speakers" icon={speaker} devices={["Speakers - System Default"]} />
+	       <DeviceSelector title="Microphone" icon={mic} devices={devices} switchToDevice={(v) => promisified({cmd: "setMicrophone", value: v})}/>
+	       <DeviceSelector title="Speakers" icon={speaker} devices={[{name:"Speakers - System Default", id:0}]} />
 	       <p id="test"> Test Noise Cancellation </p>
 	   </div>;
 }

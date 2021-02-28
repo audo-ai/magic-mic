@@ -22,7 +22,7 @@
         "icons/icon.ico"
       ],
       "resources": [],
-      "externalBin": [],
+      "externalBin": ["../build/src-native/server"],
       "copyright": "",
       "category": "DeveloperTool",
       "shortDescription": "",
