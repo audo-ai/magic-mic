@@ -11,6 +11,7 @@
     "react-dom": "^17.0.1",
     "react-scripts": "4.0.3",
     "sass": "^1.32.8",
+    "tauri": "^0.14.1",
     "web-vitals": "^1.0.1"
   },
   "scripts": {
