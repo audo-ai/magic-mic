@@ -106,8 +106,8 @@ void write_json(int fd, json j) {
   }
 }
 int main(int argc, char **argv) {
-  if (argc != 2) {
-    std::cerr << "USAGE: " << argv[0] << " SOCK_PATH" << std::endl;
+  if (argc != 3) {
+    std::cerr << "USAGE: " << argv[0] << " SOCK_PATH MODEL_PATH" << std::endl;
     return 1;
   }
 
@@ -129,7 +129,7 @@ int main(int argc, char **argv) {
 
   signal(SIGINT, handle_signal);
   std::cerr << "Starting " << VIRTUAL_MIC_NAME << " virtual mic" << std::endl;
-  ConcreteVirtualMic mic;
+  ConcreteVirtualMic mic(argv[2]);
   auto err_fut = mic.get_exception_future();
 
   stringstream ss;
