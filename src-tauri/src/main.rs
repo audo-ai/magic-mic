@@ -4,6 +4,7 @@
 )]
 
 use std::{
+  path::PathBuf,
   string::String,
   io::*,
   env,
@@ -25,6 +26,7 @@ mod cmd;
 mod rpc;
 use cmd::*;
 use rpc::*;
+
 
 fn get_message<R: Read>(r: &mut R) -> JSONRpcResp {
   let mut str = String::from("");
@@ -148,16 +150,39 @@ fn server_thread<T: Read + Write>(mut server: T, rx: mpsc::Receiver<(tauri::Webv
     }
   }
 }
-
 fn main() {
   // app is either dev or bundled. When it is dev we have to find bins
   // ourselves. Otherwise we can hopefully rely on
   // tauri_api::command::command_path
   let server_path = match env::var("SERVER_PATH") {
-    Err(_) => command::command_path("server".to_string()).unwrap(),
+    Err(_) => command::command_path(command::binary_command("server".to_string()).unwrap()).unwrap(),
     Ok(p) => p,
   };
   println!("Server Path is: {}", server_path);
+  let model_path = match env::var("MODEL_PATH") {
+    Err(_) => {
+      // Check https://github.com/tauri-apps/tauri/issues/1308
+      let mut p = tauri::api::path::resource_dir().expect("get resource dir");
+      p.push("models");
+      p.push("audo-realtime-denoiser.v1.ts");
+      match env::var("APPDIR") {
+	Ok(v) => {
+	  let mut root = PathBuf::from(v);
+	  if p.has_root() {
+	    // only on linux here
+	    root.push(p.strip_prefix("/").expect("Should be able to strip / from rooted path"));
+	  } else {
+	    root.push(p);
+	  }
+	  root.into_os_string()
+	}
+	Err(_) => {
+	  p.into_os_string()
+	}
+      }
+    },
+    Ok(p) => p.into(),
+  };
 
   let mut sock_path = tauri::api::path::runtime_dir().expect("get runtime dir");
   sock_path.push("magic-mic.socket");
@@ -170,6 +195,7 @@ fn main() {
 
   Command::new(server_path)
     .arg(sock_path.clone().into_os_string())
+    .arg(model_path)
     .stdin(Stdio::piped())
     .stdout(Stdio::piped())
     .stderr(Stdio::inherit())

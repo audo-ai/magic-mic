@@ -31,7 +31,7 @@ class PipeSourceVirtualMic;
 class PipeSourceVirtualMic : public VirtualMic {
 public:
   // TODO Need to implement copy constructors
-  PipeSourceVirtualMic();
+  PipeSourceVirtualMic(string model_path);
   // threads aren't copyable, so neiter is this
   PipeSourceVirtualMic(PipeSourceVirtualMic &) = delete;
   ~PipeSourceVirtualMic();

@@ -13,7 +13,7 @@ Denoiser::Denoiser(std::string ts_path) {
     module = torch::jit::load(ts_path);
   }
   catch (const c10::Error& e) {
-    throw e.msg();
+    throw std::runtime_error(e.msg());
   }
   module.eval();
   lstm_hidden = torch::zeros(c10::IntArrayRef({2, 1, 384}), options);

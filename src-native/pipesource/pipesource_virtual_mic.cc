@@ -19,9 +19,8 @@ using std::stringstream;
 // That gives a pretty good way to structure. I'm making some changes to make it
 // a little more cpp imo
 
-PipeSourceVirtualMic::PipeSourceVirtualMic()
-    : denoiser(
-	  "/home/gabe/code/audo/audo-ml/denoiser/realtime-w-hidden-test.ts"),
+PipeSourceVirtualMic::PipeSourceVirtualMic(string path)
+    : denoiser(path),
       pipesource_module_idx(-1), module_load_operation(nullptr),
       state(InitContext), cur_act() {
 
