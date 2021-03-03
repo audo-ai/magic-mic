@@ -2,7 +2,7 @@
 
 #include "denoiser.h"
 
-Denoiser::Denoiser(std::string ts_path) {
+Denoiser::Denoiser(std::string ts_path) : in(valid_length, 0.0) {
   options = torch::TensorOptions()
 		     .dtype(torch::kFloat32)
     //.layout(torch::kStrided)
