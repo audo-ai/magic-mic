@@ -22,7 +22,7 @@ using std::stringstream;
 PipeSourceVirtualMic::PipeSourceVirtualMic(string path)
     : denoiser(path),
       pipesource_module_idx(-1), module_load_operation(nullptr),
-      state(InitContext), cur_act() {
+      state(InitContext), pb_state(PlaybackState::StreamEmpty), cur_act() {
 
   buffer = new float[buffer_length];
   write_idx = 0;
@@ -96,7 +96,7 @@ void PipeSourceVirtualMic::run() {
       break;
     case Denoise:
       poll_recording_stream();
-      write_to_pipe();
+      write_to_outputs();
       break;
     }
     switch (cur_act.action) {
@@ -107,6 +107,19 @@ void PipeSourceVirtualMic::run() {
       set_microphone();
       break;
     case CurrentAction::NoAction:
+      break;
+    }
+    switch (pb_state) {
+    case PlaybackState::StreamEmpty:
+      break;
+    case PlaybackState::InitStream:
+      start_pb_stream();
+      break;
+    case PlaybackState::WaitingOnStream:
+      poll_pb_stream();
+      break;
+    case PlaybackState::StreamReady:
+      // I guess, don't do anything speacial in here
       break;
     }
   }
@@ -181,11 +194,17 @@ void PipeSourceVirtualMic::get_microphones() {
     break;
   }
 }
-void PipeSourceVirtualMic::write_to_pipe() {
+void PipeSourceVirtualMic::write_to_outputs() {
   size_t spew_size;
   if ((spew_size = denoiser.willspew())) {
     size_t spewed =
 	denoiser.spew(buffer, buffer_length);
+
+    // Let's hope that the playback buffer is long enough because maintaining a
+    // seperate buffer seems annoying
+    if (pb_state == PlaybackState::Loopback) {
+      pa_stream_write(pb_stream.get(), buffer, sizeof(float)*spewed, nullptr, 0, PA_SEEK_RELATIVE);
+    }
 
     ssize_t written =
 	write(pipe_fd, buffer, sizeof(float) * spewed);
@@ -277,18 +296,28 @@ void PipeSourceVirtualMic::index_cb(pa_context *c, unsigned int idx, void *u) {
   std::cerr << "Module loaded: " << idx << std::endl;
   m->pipesource_module_idx = idx;
 }
+void PipeSourceVirtualMic::start_pb_stream() {
+  pb_stream = shared_ptr<pa_stream>(pa_stream_new(ctx.get(), pb_stream_name, &shared_sample_spec, nullptr), free_pa_stream);
+    if (!pb_stream) {
+      stringstream ss;
+      ss << "pa_stream_new failed (pb): " << pa_strerror(pa_context_errno(ctx.get()));
+      throw std::runtime_error(ss.str());
+    }
 
+    int err = pa_stream_connect_playback(pb_stream.get(), nullptr, nullptr, (pa_stream_flags)0, nullptr, nullptr);
+    if (err != 0) {
+      stringstream ss;
+      ss << "pa_stream_connect_playback: " << pa_strerror(err);
+      throw std::runtime_error(ss.str());
+    }
+    pb_state = WaitingOnStream;
+}
 void PipeSourceVirtualMic::start_recording_stream() {
   // TODO: make this configurable
-    pa_sample_spec sample_spec = {};
-    sample_spec.format = PA_SAMPLE_FLOAT32LE;
-    sample_spec.rate = 16000;
-    sample_spec.channels = 1;
-
-    rec_stream = shared_ptr<pa_stream>(pa_stream_new(ctx.get(), rec_stream_name, &sample_spec, nullptr), free_pa_stream);
+    rec_stream = shared_ptr<pa_stream>(pa_stream_new(ctx.get(), rec_stream_name, &shared_sample_spec, nullptr), free_pa_stream);
     if (!rec_stream) {
       stringstream ss;
-      ss << "pa_stream_new failed: " << pa_strerror(pa_context_errno(ctx.get()));
+      ss << "pa_stream_new failed (rec): " << pa_strerror(pa_context_errno(ctx.get()));
       throw std::runtime_error(ss.str());
     }
 
@@ -299,6 +328,30 @@ void PipeSourceVirtualMic::start_recording_stream() {
       throw std::runtime_error(ss.str());
     }
     changeState(WaitRecStreamReady);
+}
+void PipeSourceVirtualMic::poll_pb_stream() {
+  pa_stream_state_t state = pa_stream_get_state(pb_stream.get());
+  switch  (state) {
+  case PA_STREAM_READY:
+    /* stream is writable, proceed now */
+    if (pb_state == PlaybackState::WaitingOnStream) {
+      pb_state = Loopback;
+    }
+    if (cur_act.action == CurrentAction::Loopback) {
+      pb_promise.set_value(true);
+      cur_act.action = CurrentAction::NoAction;
+    }
+    break;
+
+  case PA_STREAM_FAILED:
+  case PA_STREAM_TERMINATED:
+    /* stream is closed, exit */
+    throw std::runtime_error("playback_stream closed unexpectedly");
+  default:
+    /* stream is not ready yet */
+    return;
+  }
+
 }
 void PipeSourceVirtualMic::poll_recording_stream() {
   pa_stream_state_t state = pa_stream_get_state(rec_stream.get());
@@ -435,6 +488,47 @@ future<void> PipeSourceVirtualMic::setRemoveNoise(bool b) {
   p.set_value();
   return p.get_future();
 }
+future<bool> PipeSourceVirtualMic::setLoopback(bool b) {
+  lock_guard<mutex> lock(mainloop_mutex);
+  if (state < InitRecStream) {
+    throw std::runtime_error("Not ready to get Microphones");
+  }
+  // TODO: we don't support multiple actions at a time yet
+  if (cur_act.action != CurrentAction::NoAction) {
+    throw std::runtime_error("Can only handle single action at a time");
+  }
+  pb_promise = promise<bool>();
+  switch (pb_state) {
+  case StreamEmpty:
+    if (b) {
+      pb_state = PlaybackState::InitStream;
+      cur_act.action = CurrentAction::Loopback;
+    } else {
+      pb_promise.set_value(true);
+    }
+    break;
+  case StreamReady:
+    if (b) {
+      pb_state = PlaybackState::Loopback;
+    }
+    pb_promise.set_value(true);
+    break;
+  case Loopback:
+    if (b) {
+      pb_promise.set_value(true);
+    } else {
+      pb_state = StreamReady;
+      pb_promise.set_value(true);
+    }
+    break;
+  case StreamBroken:
+  default:
+    pb_promise.set_value(false);
+    break;
+  }
+
+  return pb_promise.get_future();
+}
 void PipeSourceVirtualMic::abortLastRequest() {
   lock_guard<mutex> lock(mainloop_mutex);
   switch (cur_act.action) {
@@ -448,7 +542,12 @@ void PipeSourceVirtualMic::abortLastRequest() {
     }
     break;
   case CurrentAction::SetMicrophone:
-    std::cerr << "Not yet implemetned" << std::endl;
+    // TODO
+    std::cerr << "Abort attempted on setMicrophone" << std::endl;
+    break;
+  case CurrentAction::Loopback:
+    // TODO
+    std::cerr << "Abort attempted on loopback" << std::endl;
     break;
   }
   cur_act.action = CurrentAction::NoAction;

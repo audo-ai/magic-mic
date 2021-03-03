@@ -10,6 +10,11 @@ pub enum Cmd {
     callback: String,
     error: String,
   },
+  SetLoopback {
+    value: bool,
+    callback: String,
+    error: String,
+  },
   SetShouldRemoveNoise {
     value: bool,
     callback: String,

@@ -51,3 +51,12 @@ pub fn set_microphones(ind: i32) -> JSONRpcReq {
     params: Some(serde_json::Value::Number(serde_json::Number::from(ind)))
   }
 }
+pub fn set_loopback(b: bool) -> JSONRpcReq {
+  JSONRpcReq {
+    jsonrpc: "2.0".to_string(),
+    method: "setLoopback".to_string(),
+    id: get_id(), // TODO make this random
+    //params: Some(serde_json::Value::Bool(serde_json::Bool::from(b)))
+    params: Some(serde_json::Value::Bool(b.into()))
+  }
+}

@@ -59,6 +59,7 @@ void wait_on_future(future<T> &f) {
   throw interrupted_error();
 }
 json handle_request(ConcreteVirtualMic *mic, RPCRequest req) {
+  // TODO: DRY
   switch (req.type) {
   case GetStatus: {
     future<bool> f = mic->getStatus();
@@ -80,13 +81,30 @@ json handle_request(ConcreteVirtualMic *mic, RPCRequest req) {
   }
   case SetMicrophone: {
     future<void> f = mic->setMicrophone(req.mic_id);
-    f.wait();
+    try {
+      wait_on_future<void>(f);
+    } catch(interrupted_error &e) {
+      return make_error(-32000, "Server error", "Interrupted while waiting for response");
+    }
     return make_response(req.id, {});
   }
   case SetRemoveNoise: {
-    future f = mic->setRemoveNoise(req.should_remove_noise);
-    f.wait();
+    future<void> f = mic->setRemoveNoise(req.should_remove_noise);
+    try {
+      wait_on_future<void>(f);
+    } catch(interrupted_error &e) {
+      return make_error(-32000, "Server error", "Interrupted while waiting for response");
+    }
     return make_response(req.id, {});
+  }
+  case SetLoopback: {
+    future<bool> f = mic->setLoopback(req.should_loopback);
+    try {
+      wait_on_future<bool>(f);
+    } catch(interrupted_error &e) {
+      return make_error(-32000, "Server error", "Interrupted while waiting for response");
+    }
+    return make_response(req.id, f.get());
   }
   default:
     throw std::runtime_error("Unknown request enountered in handle_request");
@@ -135,7 +153,12 @@ int main(int argc, char **argv) {
   stringstream ss;
   while (running) {
     if (std::future_status::ready == err_fut.wait_for(std::chrono::milliseconds(0))) {
-      std::rethrow_exception(err_fut.get());
+      try {
+	std::rethrow_exception(err_fut.get());
+      } catch (const std::exception &e) {
+	std::cerr << "Virtual Mic through exception: \"" << e.what() << "\"\n";
+	break;
+      }
     }
 
     fd_set rfds;

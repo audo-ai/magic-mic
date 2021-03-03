@@ -35,7 +35,14 @@ RPCRequest parse_request(json j) {
 		       "param must be bool for setRemoveNoise", req.id);
     }
     req.type = SetRemoveNoise;
-    req.mic_id = j["params"].get<bool>();
+    req.should_remove_noise = j["params"].get<bool>();
+  } else if (method == "setLoopback") {
+    if (!j["params"].is_boolean()) {
+      throw make_error(-32602, "Invalid Params",
+		       "param must be bool for setLoopback", req.id);
+    }
+    req.type = SetLoopback;
+    req.should_loopback = j["params"].get<bool>();
   }
   return req;
 }
