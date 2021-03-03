@@ -61,7 +61,9 @@ const DeviceSelector = ({title, icon, devices, switchToDevice}) => {
 
 const App = () => {
     const [devices, setDevices] = useState([]);
+    const [loopback, setLoopback] = useState(false);
     useEffect(() => {
+	// TODO: Handle errors
 	setInterval(() => {
 	    promisified({cmd: "getStatus"})
 		.then((v) => console.log(JSON.stringify(v)))
@@ -76,12 +78,23 @@ const App = () => {
 	    })
 	    .catch((v) => console.log(JSON.stringify(v)));
     }, []);
+    useEffect(() => {
+	// TODO: Handle errors
+	if (devices.length > 0) {
+	promisified({cmd: "setLoopback", value: loopback})
+	    .then((v) => {
+		console.log(JSON.stringify(v))
+	    })
+	    .catch((v) => console.log(JSON.stringify(v)));
+	}
+    }, [loopback, devices]);
 
     return <div id="main-container">
 	       <img id="logo" src={logo} />
 	       <DeviceSelector title="Microphone" icon={mic} devices={devices} switchToDevice={(v) => promisified({cmd: "setMicrophone", value: v})}/>
 	       <DeviceSelector title="Speakers" icon={speaker} devices={[{name:"Speakers - System Default", id:0}]} />
-	       <p id="test"> Test Noise Cancellation </p>
+	       <input type="checkbox" value={loopback} onChange={() => setLoopback(!loopback)} name="test"/>
+	       <label for="test" id="test"> Test Noise Cancellation </label>
 	   </div>;
 }
 

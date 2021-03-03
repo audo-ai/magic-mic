@@ -55,6 +55,7 @@ fn rxtx_server<T: Read + Write>(server: &mut T, req: JSONRpcReq) -> JSONRpcResp 
 }
 fn server_thread<T: Read + Write>(mut server: T, rx: mpsc::Receiver<(tauri::WebviewMut, Cmd)>) -> () {
   loop {
+    // TODO: This is horrible. DRY!
     if let Ok((mut _webview, event)) = rx.recv() {
       match event {
 	Cmd::GetStatus{callback, error} => {
@@ -87,6 +88,30 @@ fn server_thread<T: Read + Write>(mut server: T, rx: mpsc::Receiver<(tauri::Webv
 	    JSONRpcResp{result: None, ..} => {
 	      _webview.dispatch(move|wv| {
 		tauri::execute_promise_sync(wv, move|| Ok(serde_json::Value::Null), callback, error);
+	      });
+	    }
+	    JSONRpcResp{error: Some(e), ..} => {
+	      _webview.dispatch(move|wv| {
+		tauri::execute_promise_sync(wv, move|| Ok(e), callback, error);
+	      });
+	    }
+	    _ => {
+	      _webview.dispatch(move|wv| {
+		tauri::execute_promise_sync(wv, move|| Ok(String::from("Unknown error")), callback, error);
+	      });
+	    }
+	  };
+	},
+	Cmd::SetLoopback{value, callback, error} => {
+	  match rxtx_server(&mut server, set_loopback(value)) {
+	    JSONRpcResp{result: Some(serde_json::Value::Bool(b)), ..} => {
+	      _webview.dispatch(move|wv| {
+		tauri::execute_promise_sync(wv, move|| Ok(b), callback, error);
+	      });
+	    }
+	    JSONRpcResp{result: Some(b), ..} => {
+	      _webview.dispatch(move|wv| {
+		tauri::execute_promise_sync(wv, move|| Ok(String::from("Unknown result")), callback, error);
 	      });
 	    }
 	    JSONRpcResp{error: Some(e), ..} => {
@@ -215,21 +240,12 @@ fn main() {
 	}
 	Ok(command) => {
 	  match command {
-	    c @ Cmd::GetStatus{..} => {
-	      to_server.send((_webview.as_mut(), c)).map_err(|e| format!("sending error: {}", e))
-	    },
-	    c @ Cmd::SetShouldRemoveNoise{..} => {
-	      to_server.send((_webview.as_mut(), c)).map_err(|e| format!("sending error: {}", e))
-	    },
-	    c @ Cmd::GetMicrophones{..} => {
-	      to_server.send((_webview.as_mut(), c)).map_err(|e| format!("sending error: {}", e))
-	    },
-	    c @ Cmd::SetMicrophone{..} => {
-	      to_server.send((_webview.as_mut(), c)).map_err(|e| format!("sending error: {}", e))
-	    },
 	    Cmd::Exit => {
 	      Ok(())
 	    }
+	    c => {
+	      to_server.send((_webview.as_mut(), c)).map_err(|e| format!("sending error: {}", e))
+	    },
 	  }
 	}
       }

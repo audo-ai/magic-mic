@@ -42,6 +42,7 @@ public:
   future<vector<pair<int, string>>> getMicrophones() override;
   future<void> setMicrophone(int) override;
   future<void> setRemoveNoise(bool) override;
+  future<bool> setLoopback(bool) override;
   future<std::exception_ptr> get_exception_future() override {
     return exception_promise.get_future();
   };
@@ -64,7 +65,7 @@ private:
     promise<void> p;
   };
   struct CurrentAction {
-    enum { NoAction, GetMicrophones, SetMicrophone } action;
+    enum { NoAction, GetMicrophones, SetMicrophone, Loopback } action;
     // I'm a little worried about the memory management here
     // union {
       struct GetMicrophones get_mics;
@@ -104,12 +105,17 @@ private:
   // initialization and would overall be more elegant. It would be more
   // resillient and more accuratly reflect the fact that whats relevant isn't
   // really a line of execution but the statse of each resource and operation.
-  const char *rec_stream_name = "Recording Stream";
+  const char *rec_stream_name = "Magic Mic Recording Stream";
+  const char *pb_stream_name = "Magic Mic Playback Stream";
   const char *source = nullptr;
   const char *client_name = "Client Name";
   const int target_latency = 0;
   const size_t buffer_length = 2048;
-
+  const pa_sample_spec shared_sample_spec = {
+      .format = PA_SAMPLE_FLOAT32LE,
+      .rate = 16000,
+      .channels = 1,
+  };
   string pipe_file_name;
   // It appears c++ doesn't do non blocking writes which is a problem for
   // signal handling, so we need to go old school (sort of, still have
@@ -131,6 +137,26 @@ private:
   int pipesource_module_idx;
   pa_operation *module_load_operation;
 
+  // The playback stream is sort of unrelated to all the other stuff. It should
+  // only be inited after everything else is inited, but It shouldn't be inited
+  // if it isn't requested. That could cause problems if someone doesn't wan't
+  // playback, and just wants recording. Probably a very small number of people
+  // (if any) that playback would break something, but whatever.
+  // TODO: This should probably be setup simillarly to the other commands, but
+  // I'll refactor that later.
+  // TODO: failures on playback are not fatal. They shouldn't be treated fatally
+  enum PlaybackState {
+    StreamEmpty,
+    InitStream,
+    WaitingOnStream,
+    StreamReady,
+    Loopback,
+    StreamBroken,
+  };
+  PlaybackState pb_state;
+  shared_ptr<pa_stream> pb_stream;
+  promise<bool> pb_promise;
+
   Denoiser denoiser;
 
   mutex mainloop_mutex;
@@ -140,10 +166,12 @@ private:
   void poll_context();
   void start_recording_stream();
   void poll_recording_stream();
+  void start_pb_stream();
+  void poll_pb_stream();
   void poll_operation();
   void check_module_loaded();
   void load_pipesource_module();
-  void write_to_pipe();
+  void write_to_outputs();
   static void index_cb(pa_context *c, unsigned int idx, void *u);
 
   void set_microphone();
