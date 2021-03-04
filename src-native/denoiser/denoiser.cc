@@ -34,12 +34,8 @@ std::size_t Denoiser::willspew() {
   if (!should_denoise) {
     return in.size();
   }
-  // I can't figure out a good way to calculate this
-  int written = 0;
-  while (in.size() - written >= valid_length) {
-    written += hop_size;
-  }
-  return written;
+  // Well, that was actually pretty simple
+  return hop_size*((in.size() - valid_length)/hop_size);
 }
 std::size_t Denoiser::spew(float *out, std::size_t maxsize) {
   int written = 0;

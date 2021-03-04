@@ -72,12 +72,18 @@ void PipeSourceVirtualMic::run() {
 
   try {
   while (should_run) {
-    lock_guard<mutex> lock(mainloop_mutex);
-    if ((err = pa_mainloop_iterate(mainloop.get(), 0, NULL)) < 0) {
+    std::size_t willspew; 
+    {
+      lock_guard<mutex> lock(mainloop_mutex);
+      willspew = denoiser.willspew();
+    }
+    // block when we won't spew
+    if ((err = pa_mainloop_iterate(mainloop.get(), 0 == willspew, NULL)) < 0) {
       stringstream ss;
       ss << "pa_mainloop_iterate: " << pa_strerror(err);
       throw std::runtime_error(ss.str());
     }
+    lock_guard<mutex> lock(mainloop_mutex);
     // TODO figure out a way to respond to state changes. maybe do this along
     // side of switching over to a state bitfield
     switch (state) {
@@ -288,6 +294,7 @@ void PipeSourceVirtualMic::poll_operation() {
 }
 
 void PipeSourceVirtualMic::load_pipesource_module() {
+  // TODO: use mktemp or whatever variant is appropraite
   pipe_file_name = "/tmp/virtmic";
   module_load_operation =
       pa_context_load_module(ctx.get(), "module-pipe-source",
@@ -450,6 +457,7 @@ PipeSourceVirtualMic::~PipeSourceVirtualMic() {
 void PipeSourceVirtualMic::stop() {
   //   lock_guard<mutex> lock(mainloop_mutex);
   should_run = false;
+  pa_mainloop_wakeup(mainloop.get());
   async_thread.join();
 }
 future<bool> PipeSourceVirtualMic::getStatus() {
@@ -472,6 +480,7 @@ future<vector<pair<int, string>>> PipeSourceVirtualMic::getMicrophones() {
   cur_act.get_mics = {.state =
 			  GetMicrophones::GetMicrophonesActionState::Init,
 		      .p = promise<vector<pair<int, string>>>()};
+  pa_mainloop_wakeup(mainloop.get());
   return cur_act.get_mics.p.get_future();
 }
 future<void> PipeSourceVirtualMic::setMicrophone(int ind) {
@@ -487,6 +496,8 @@ future<void> PipeSourceVirtualMic::setMicrophone(int ind) {
   cur_act.set_mic = {.state = SetMicrophone::SetMicrophoneActionState::InitGettingSource,
 		     .ind = ind,
                      .p = promise<void>()};
+
+  pa_mainloop_wakeup(mainloop.get());
   return cur_act.set_mic.p.get_future();
 }
 future<void> PipeSourceVirtualMic::setRemoveNoise(bool b) {
@@ -536,6 +547,7 @@ future<bool> PipeSourceVirtualMic::setLoopback(bool b) {
     break;
   }
 
+  pa_mainloop_wakeup(mainloop.get());
   return pb_promise.get_future();
 }
 void PipeSourceVirtualMic::abortLastRequest() {
@@ -559,6 +571,7 @@ void PipeSourceVirtualMic::abortLastRequest() {
     logger->warn("Abort attempted on loopback");
     break;
   }
+  pa_mainloop_wakeup(mainloop.get());
   cur_act.action = CurrentAction::NoAction;
 }
 std::ostream &operator<<(std::ostream &out, const PipeSourceVirtualMic::State value) {
