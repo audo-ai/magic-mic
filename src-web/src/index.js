@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 
-import { promisified } from 'tauri/api/tauri'
+import { invoke, promisified } from 'tauri/api/tauri'
 import { listen } from 'tauri/api/event'
 
 import './main.scss';
@@ -13,6 +13,14 @@ import logo from './img/logo.png';
 import mic from './img/mic.svg';
 import speaker from './img/speaker.svg';
 
+const DEBUG = 0;
+const ERROR = 1;
+const INFO = 2;
+const TRACE = 3;
+const WARN = 4;
+const log = (msg, level) => {
+    invoke({cmd: "log", msg, level});
+}
 const SelectWithImage = ({options, image, chosen, setChosen}) => {
     return <div className="select-with-image">
 	       <img src={image} />
@@ -36,8 +44,8 @@ const DeviceSelector = ({title, icon, devices, switchToDevice}) => {
     const [remove, setRemove] = useState(false);
     useEffect(() => {
 	promisified({cmd: "setShouldRemoveNoise", value: remove})
-	    .then((v) => console.log(JSON.stringify(v)))
-	    .catch((v) => console.log(JSON.stringify(v)));
+	    .then((v) => log(`setShouldRemoveNoise response: "${JSON.stringify(v)}"`, TRACE))
+	    .catch((v) => log(`setShouldRemoveNoise error: "${JSON.stringify(v)}"`, ERROR));
     }, [remove]);
     return <div className="device-selector">
 	       <h1> {title} </h1>
@@ -46,8 +54,8 @@ const DeviceSelector = ({title, icon, devices, switchToDevice}) => {
 				chosen={device}
 				setChosen={(v) => {
 				    switchToDevice(map[v])
-					.then(console.log)
-					.catch(console.error);
+					.then((e) => log(`switchToDevice response: "${JSON.stringify(e)}"`, TRACE))
+					.catch((e) => log(`switchToDevice error: "${JSON.stringify(e)}"`, ERROR));
 				}}/>
 	       <div className="remove-noise">
 		   <label className="text"> Remove Noise </label>
@@ -66,26 +74,27 @@ const App = () => {
 	// TODO: Handle errors
 	setInterval(() => {
 	    promisified({cmd: "getStatus"})
-		.then((v) => console.log(JSON.stringify(v)))
-		.catch((v) => console.log(JSON.stringify(v)));
+		.then((v) => log(`getStatus response: "${JSON.stringify(v)}"`, TRACE))
+		.catch((v) => log(`getStatus error: "${JSON.stringify(v)}"`, ERROR))
 	}, 10000);
     }, []);
     useEffect(() => {
 	promisified({cmd: "getMicrophones"})
 	    .then((v) => {
 		setDevices(v);
-		console.log(JSON.stringify(v))
+		log(`getMicrophones response: "${JSON.stringify(v)}"`, TRACE)
 	    })
-	    .catch((v) => console.log(JSON.stringify(v)));
+	    .catch((v) =>
+		log(`getMicrophones error: "${JSON.stringify(v)}"`, ERROR));
     }, []);
     useEffect(() => {
 	// TODO: Handle errors
 	if (devices.length > 0) {
 	promisified({cmd: "setLoopback", value: loopback})
-	    .then((v) => {
-		console.log(JSON.stringify(v))
-	    })
-	    .catch((v) => console.log(JSON.stringify(v)));
+		.then((v) =>
+		    log(`setLoopback response: "${JSON.stringify(v)}"`, TRACE))
+		.catch((v) =>
+		    log(`setLoopback error: "${JSON.stringify(v)}"`, ERROR));
 	}
     }, [loopback, devices]);
 
