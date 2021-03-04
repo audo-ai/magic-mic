@@ -2,6 +2,14 @@
 
 This is the directory containing all of the native code for project-x.
 
+## Dependencies
+### spdlog
+The staticly linked system spdlog doesn't link with dynamic libraries, so you
+need to download the source and build it yourself. You need to set
+`SPDLOG_BUILD_SHARED=ON`. You don't need to mess with fmt at all. Then just make
+sure `spdlog_DIR` is set to the local build when you build this. Also you might
+want to set `CMAKE_INSTALL_PREFIX` to something like `build/prefix`.
+
 ## Module
 This is a c++ implementation of a pulseaudio module. Puleaudio does not really
 support c++ plugins, so that leads to a bit of a hack (just having

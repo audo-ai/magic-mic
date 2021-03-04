@@ -10,6 +10,8 @@
 #include <thread>
 #include <optional>
 
+#include <spdlog/spdlog.h>
+#include <spdlog/sinks/null_sink.h>
 
 #include <pulse/pulseaudio.h>
 
@@ -32,6 +34,7 @@ class PipeSourceVirtualMic : public VirtualMic {
 public:
   // TODO Need to implement copy constructors
   PipeSourceVirtualMic(string model_path);
+  PipeSourceVirtualMic(string model_path, std::shared_ptr<spdlog::logger> logger);
   // threads aren't copyable, so neiter is this
   PipeSourceVirtualMic(PipeSourceVirtualMic &) = delete;
   ~PipeSourceVirtualMic();
@@ -47,6 +50,8 @@ public:
     return exception_promise.get_future();
   };
 private:
+  std::shared_ptr<spdlog::logger> logger;
+  
   promise<std::exception_ptr> exception_promise;
   thread async_thread;
   struct GetMicrophones {
@@ -96,6 +101,7 @@ private:
     WaitRecStreamReady,
     Denoise
   };
+  friend std::ostream &operator<<(std::ostream &out, const PipeSourceVirtualMic::State value);
   CurrentAction cur_act;
   State state;
   void changeState(State s);
