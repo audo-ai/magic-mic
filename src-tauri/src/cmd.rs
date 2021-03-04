@@ -23,7 +23,7 @@ pub enum Cmd {
   SetMicrophone {
     value: i32,
     callback: String,
-    error: String
+    error: String,
   },
   GetMicrophones {
     callback: String,
@@ -41,4 +41,4 @@ pub enum Cmd {
 //   Ack,
 //   Status(bool),
 //   Error(String),
-// 
+//
