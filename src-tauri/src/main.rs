@@ -21,6 +21,8 @@ use std::{
 };
 use tauri::api::*;
 use anyhow;
+#[macro_use]
+extern crate log;
 
 mod cmd;
 mod rpc;
@@ -46,11 +48,11 @@ fn get_message<R: Read>(r: &mut R) -> JSONRpcResp {
 }
 fn rxtx_server<T: Read + Write>(server: &mut T, req: JSONRpcReq) -> JSONRpcResp {
   let r = serde_json::to_string(&req).unwrap();
-  println!("Server request: {}", serde_json::to_string(&r).unwrap());
+  trace!("Server request: \"{}\"", serde_json::to_string_pretty(&r).unwrap());
   server.write(&r.as_bytes()).expect("Failed to write to server");
   server.write(b"\n").expect("Failed to write to server");
   let r = get_message(server);
-  println!("Server response: {}", serde_json::to_string(&r).unwrap());
+  trace!("Server response: \"{}\"", serde_json::to_string_pretty(&r).unwrap());
   return r
 }
 fn server_thread<T: Read + Write>(mut server: T, rx: mpsc::Receiver<(tauri::WebviewMut, Cmd)>) -> () {
@@ -170,12 +172,17 @@ fn server_thread<T: Read + Write>(mut server: T, rx: mpsc::Receiver<(tauri::Webv
 	},
 	Cmd::Exit => {
 	  break;
+	},
+	Cmd::Log{..} => {
+	  error!("RPC thread received Cmd::Log message!");
 	}
       }
     }
   }
 }
 fn main() {
+  env_logger::init();
+  info!("Starting");
   // app is either dev or bundled. When it is dev we have to find bins
   // ourselves. Otherwise we can hopefully rely on
   // tauri_api::command::command_path
@@ -183,7 +190,7 @@ fn main() {
     Err(_) => command::command_path(command::binary_command("server".to_string()).unwrap()).unwrap(),
     Ok(p) => p,
   };
-  println!("Server Path is: {}", server_path);
+  trace!("Server Path is: {}", server_path);
   let model_path = match env::var("MODEL_PATH") {
     Err(_) => {
       // Check https://github.com/tauri-apps/tauri/issues/1308
@@ -242,7 +249,39 @@ fn main() {
 	  match command {
 	    Cmd::Exit => {
 	      Ok(())
-	    }
+	    },
+	    Cmd::Log {msg, level} => {
+	      // TODO env_logger doesn't seem to print the target. not sure if I
+	      // am misunderstanding the purpose of target, or if env_logger
+	      // just doesn't do that or what, but prefixingwith "js: " is my
+	      // temporary workaround
+	      match level {
+		0 => {
+		  debug!(target: "js", "js: {}", msg);
+		  Ok(())
+		},
+		1 => {
+		  error!(target: "js", "js: {}", msg);
+		  Ok(())
+		},
+		2 => {
+		  info!(target: "js", "js: {}", msg);
+		  Ok(())
+		},
+		3 => {
+		  trace!(target: "js", "js: {}", msg);
+		  Ok(())
+		},
+		4 => { // 4=warn (totally intentional)
+		  warn!(target: "js", "js: {}", msg);
+		  Ok(())
+		},
+		_ => {
+		  warn!(target: "js", "Recieved invalid log level from javsascript");
+		  Err("Recieved invalid log level from javsascript".into())
+		}
+	      }
+	    },
 	    c => {
 	      to_server.send((_webview.as_mut(), c)).map_err(|e| format!("sending error: {}", e))
 	    },
@@ -252,5 +291,5 @@ fn main() {
     })
     .build()
     .run();
-  println!("Exiting");
+  info!("Exiting");
 }

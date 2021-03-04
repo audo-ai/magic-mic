@@ -29,6 +29,10 @@ pub enum Cmd {
     callback: String,
     error: String,
   },
+  Log {
+    msg: String,
+    level: i32,
+  },
   Exit,
 }
 // #[derive(Deserialize, Debug)]
