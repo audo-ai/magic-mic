@@ -10,18 +10,21 @@
 #include <chrono>
 
 #include <errno.h>
+#include <string.h>
 #include <fcntl.h>
 #include <sys/select.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <unistd.h>
 
-#include <nlohmann/json.hpp>
+#include "nlohmann/json.hpp"
+#include "spdlog/spdlog.h"
+#include "spdlog/sinks/stdout_color_sinks.h"
 
-#include <virtual_mic.h>
+#include "virtual_mic.h"
 
 #ifdef USE_PIPESOURCE
-#include <pipesource_virtual_mic.h>
+#include "pipesource_virtual_mic.h"
 typedef PipeSourceVirtualMic ConcreteVirtualMic;
 #define VIRTUAL_MIC_NAME "PIPESOURCE"
 #endif
@@ -39,7 +42,7 @@ static bool running = true;
 constexpr char delim = '\n';
 
 void handle_signal(int sig) {
-  std::cerr << "Signal Recived" << std::endl;
+  spdlog::get("server")->info("Signal Received");
   switch (sig) {
   case SIGTERM:
   case SIGINT:
@@ -124,14 +127,17 @@ void write_json(int fd, json j) {
   }
 }
 int main(int argc, char **argv) {
+  auto logger = spdlog::stderr_color_mt("server");
+  //spdlog::register_logger(logger);
+
   if (argc != 3) {
-    std::cerr << "USAGE: " << argv[0] << " SOCK_PATH MODEL_PATH" << std::endl;
+    logger->error("USAGE: {} SOCK_PATH MODEL_PATH", argv[0]);
     return 1;
   }
 
   int sock_fd = socket(AF_UNIX, SOCK_STREAM, 0);
   if (!sock_fd) {
-    perror("socket");
+    logger->error("socket(AF_UNIX, SOCK_STREAM, 0): {}", strerror(errno));
     return 1;
   }
   struct sockaddr_un addr;
@@ -140,14 +146,16 @@ int main(int argc, char **argv) {
   strcpy(addr.sun_path, argv[1]);
 
   if (-1 == connect(sock_fd, (sockaddr *)&addr, sizeof(addr))) {
-    perror("connect");
+    logger->error("connect(...): {}", strerror(errno));
     return 1;
   }
   fcntl(sock_fd, F_SETFL, O_NONBLOCK);
 
   signal(SIGINT, handle_signal);
-  std::cerr << "Starting " << VIRTUAL_MIC_NAME << " virtual mic" << std::endl;
-  ConcreteVirtualMic mic(argv[2]);
+  logger->info("Starting {} virtual mic", VIRTUAL_MIC_NAME);
+  auto l = spdlog::stderr_color_mt("virtmic");
+  l->set_level(spdlog::level::trace);
+  ConcreteVirtualMic mic(argv[2], l);
   auto err_fut = mic.get_exception_future();
 
   stringstream ss;
@@ -156,7 +164,7 @@ int main(int argc, char **argv) {
       try {
 	std::rethrow_exception(err_fut.get());
       } catch (const std::exception &e) {
-	std::cerr << "Virtual Mic through exception: \"" << e.what() << "\"\n";
+	logger->error("Virtual Mic through exception \"{}\"", e.what());
 	break;
       }
     }
@@ -175,7 +183,7 @@ int main(int argc, char **argv) {
 
     ret = pselect(sock_fd + 1, &rfds, nullptr, nullptr, &tv, &mask);
     if (ret == -1) {
-      std::cerr << "pselect error: " << strerror(errno) << std::endl;
+      logger->error("pselect(...): {}", strerror(errno));
       running = false;
     }
 

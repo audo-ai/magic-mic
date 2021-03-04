@@ -11,6 +11,10 @@
 #include <fcntl.h>
 #include <unistd.h>
 
+#include <spdlog/sinks/stdout_color_sinks.h>
+// must be included for custom formatting of enums
+#include <spdlog/fmt/ostr.h> 
+
 #include "pipesource_virtual_mic.h"
 
 using std::stringstream;
@@ -19,10 +23,12 @@ using std::stringstream;
 // That gives a pretty good way to structure. I'm making some changes to make it
 // a little more cpp imo
 
-PipeSourceVirtualMic::PipeSourceVirtualMic(string path)
+PipeSourceVirtualMic::PipeSourceVirtualMic(string path, std::shared_ptr<spdlog::logger> logger)
     : denoiser(path),
+      logger(logger),
       pipesource_module_idx(-1), module_load_operation(nullptr),
       state(InitContext), pb_state(PlaybackState::StreamEmpty), cur_act() {
+  logger->trace("Init PipeSourceVirtualMic");
 
   buffer = new float[buffer_length];
   write_idx = 0;
@@ -36,8 +42,12 @@ PipeSourceVirtualMic::PipeSourceVirtualMic(string path)
   exception_promise = promise<std::exception_ptr>();
   async_thread = thread(&PipeSourceVirtualMic::run, this);
 }
+PipeSourceVirtualMic::PipeSourceVirtualMic(string path)
+    : PipeSourceVirtualMic(
+	  path, spdlog::create<spdlog::sinks::null_sink_st>("virtmic_null")) {}
+
 void PipeSourceVirtualMic::changeState(State s) {
-  std::cerr << "Changin state from " << state << " to " << s << std::endl;
+  logger->trace("Pipesource changing from state {} to state {}", state, s);
   state = s;
 }
 
@@ -293,7 +303,7 @@ void PipeSourceVirtualMic::load_pipesource_module() {
 
 void PipeSourceVirtualMic::index_cb(pa_context *c, unsigned int idx, void *u) {
   PipeSourceVirtualMic *m = (PipeSourceVirtualMic *)u;
-  std::cerr << "Module loaded: " << idx << std::endl;
+  m->logger->debug("Module loaded, idx={}", idx);
   m->pipesource_module_idx = idx;
 }
 void PipeSourceVirtualMic::start_pb_stream() {
@@ -405,18 +415,18 @@ PipeSourceVirtualMic::~PipeSourceVirtualMic() {
     err = close(pipe_fd);
   }
   if (err) {
-    std::cerr << "Error closing pipe_fd: " << strerror(err) << std::endl;
+    logger->error("Error closing pipe_fd: {}", strerror(err));
   }
   err = 0;
   delete buffer;
   if (-1 != pipesource_module_idx && ctx && PA_CONTEXT_READY == pa_context_get_state(ctx.get())) {
     // TODO make this use logger when I get that
-    std::cerr<< std::endl << "Unloading module" << std::endl;
+    logger->trace("Unloading module");
     pa_operation *op = pa_context_unload_module(ctx.get(), pipesource_module_idx, nullptr, nullptr);
     int i;
     for (i = 0; !err && i < 1000; i++) {
       if ((err = pa_mainloop_iterate(mainloop.get(), 0, NULL)) < 0) {
-	std::cerr << "Error: " << pa_strerror(err) << std::endl;
+	logger->error("Error unloading module in pa_mainloop_iterate(...): {}", pa_strerror(err));
 	break;
       }
       err = 0;
@@ -428,13 +438,12 @@ PipeSourceVirtualMic::~PipeSourceVirtualMic() {
 	break;
       case PA_OPERATION_CANCELLED:
 	err = 1;
-	std::cerr << "Unload operation cancelled" << std::endl;
+	logger->warn("Unload operation cancelled");
 	break;
       }
     }
     if (err) {
-      std::cerr << err << std::endl;
-      std::cerr << "Error unloading module" << std::endl;
+      logger->error("Error unloading module");
     }
   }
 }
@@ -543,12 +552,35 @@ void PipeSourceVirtualMic::abortLastRequest() {
     break;
   case CurrentAction::SetMicrophone:
     // TODO
-    std::cerr << "Abort attempted on setMicrophone" << std::endl;
+    logger->warn("Abort attempted on setMicrophone");
     break;
   case CurrentAction::Loopback:
     // TODO
-    std::cerr << "Abort attempted on loopback" << std::endl;
+    logger->warn("Abort attempted on loopback");
     break;
   }
   cur_act.action = CurrentAction::NoAction;
+}
+std::ostream &operator<<(std::ostream &out, const PipeSourceVirtualMic::State value) {
+  const char *s = 0;
+
+#define PROCESS_VAL(c, p)                                                      \
+  case (c):                                                                    \
+    s = p;                                                                     \
+    break;
+
+  switch (value) {
+    PROCESS_VAL(PipeSourceVirtualMic::State::InitContext, "InitContext");
+    PROCESS_VAL(PipeSourceVirtualMic::State::WaitContextReady, "WaitContextReady");
+    PROCESS_VAL(PipeSourceVirtualMic::State::InitCheckModuleLoaded, "InitCheckModuleLoaded");
+    PROCESS_VAL(PipeSourceVirtualMic::State::WaitCheckModuleLoaded, "WaitCheckModuleLoaded");
+    PROCESS_VAL(PipeSourceVirtualMic::State::InitModule, "InitModule");
+    PROCESS_VAL(PipeSourceVirtualMic::State::WaitModuleReady, "WaitModuleReady");
+    PROCESS_VAL(PipeSourceVirtualMic::State::InitRecStream, "InitRecStream");
+    PROCESS_VAL(PipeSourceVirtualMic::State::WaitRecStreamReady, "WaitRecStreamReady");
+    PROCESS_VAL(PipeSourceVirtualMic::State::Denoise, "Denoise");
+  }
+#undef PROCESS_VAL
+
+  return out << s;
 }
