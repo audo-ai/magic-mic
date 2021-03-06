@@ -12,15 +12,11 @@ find_package(Torch REQUIRED)
 target_link_libraries(denoiser "${TORCH_LIBRARIES}")
 set_property(TARGET denoiser PROPERTY CXX_STANDARD 14)
 
-# Common dependency
-find_package(spdlog REQUIRED)
-
 # Build Server
 add_executable(server server/main.cc server/rpc.cc)
 set_property(TARGET server PROPERTY CXX_STANDARD 17)
 target_include_directories(server PRIVATE common/)
 
-find_package(nlohmann_json 3.9.0 REQUIRED)
 # TODO Not sure why I can't link it PRIVATE
 # Well, I can link with private but only if literally everything in this file is
 # also linked with private. I tried that and apparently that keeps pipesource

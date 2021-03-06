@@ -21,8 +21,8 @@
         "icons/icon.icns",
         "icons/icon.ico"
       ],
-      "resources": ["models/audo-realtime-denoiser.v1.ts"],
-      "externalBin": ["../build/src-native/server"],
+      "resources": ["models/", "native/runtime_libs"],
+      "externalBin": ["native/server"],
       "copyright": "",
       "category": "DeveloperTool",
       "shortDescription": "",

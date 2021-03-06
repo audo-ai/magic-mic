@@ -10,3 +10,5 @@ yarn-error.log
 .dir-local.el
 .#*
 .cache
+
+src-tauri/native
