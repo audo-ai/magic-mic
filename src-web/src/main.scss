@@ -1,0 +1,35 @@
+@font-face {
+    font-family: "AFontMedium";
+    src: url("fonts/Roboto-Medium.ttf");
+}
+@font-face {
+    font-family: "AFontBold";
+    src: url("fonts/Roboto-Bold.ttf");
+}
+@font-face {
+    font-family: "AFontRegular";
+    src: url("fonts/Roboto-Regular.ttf");
+}
+
+body {
+    background: #121212;
+    color: white;
+    font-family: "AFontRegular";
+}
+#main-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    max-width: 400px;
+    margin: auto;
+    margin-top: 20px;
+    #logo {
+	width: 20%;
+    }
+    #test {
+	font-family: "AFontMedium";
+	font-size: 20px;
+	color: #f05742;
+	margin-top: 40px;
+    }
+}

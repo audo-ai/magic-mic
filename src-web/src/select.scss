@@ -1,0 +1,52 @@
+.select-with-image {
+    display: flex;
+    flex-direction: row;
+    height: 60px;
+    width: 100%;
+
+    background: #e5e5e5;
+
+    border-radius: 5px;
+    label {
+	display: flex;
+	flex-direction: row;
+	align-content: center;
+	justify-content: space-between;
+    }
+    select, label:after {
+	background: #e5e5e5;
+	font-size: 20px;
+	font-weight: medium;
+	color: #4f4f4f;
+	font-family: "AFontMedium";
+    }
+    label:after {
+	content: '▼';
+	align-self: center;
+	margin-left: 10px;
+	margin-right: 10px;
+    }
+    select {
+	height: 100%;
+	appearance: none;
+	width: 100%;
+	padding-left: 20px;
+	margin-right: 0px;
+	border-radius: 5px;
+	border-width: 0px;
+    }
+    img {
+	height: 70%;
+	margin: auto;
+	background: #0000;
+	width: 20%;
+	filter: invert(0);
+    }
+    .vert-line {
+	width: 2px;
+	background-color: grey;
+	height: 80%;
+	margin-top: auto;
+	margin-bottom: auto;
+    }
+}
