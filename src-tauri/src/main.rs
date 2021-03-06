@@ -247,6 +247,27 @@ fn server_thread<T: Read + Write>(
     }
   }
 }
+// https://github.com/tauri-apps/tauri/issues/1308
+fn get_real_resource_dir() -> Option<PathBuf> {
+  let mut p = tauri::api::path::resource_dir()?;
+  match env::var("APPDIR") {
+    Ok(v) => {
+      let mut root = PathBuf::from(v);
+      if p.has_root() {
+        // only on linux here
+        root.push(
+          p.strip_prefix("/")
+            .expect("has_root() returned true; we should be able to strip / prefix"),
+        );
+      } else {
+        root.push(p);
+      }
+      Some(root)
+    }
+    Err(_) => Some(p.into()),
+  }
+}
+
 fn main() {
   env_logger::init();
   info!("Starting");
@@ -260,31 +281,23 @@ fn main() {
     Ok(p) => p,
   };
   trace!("Server Path is: {}", server_path);
+
+  let resource_dir = get_real_resource_dir().expect("resource dir required");
+
   let model_path = match env::var("MODEL_PATH") {
     Err(_) => {
       // Check https://github.com/tauri-apps/tauri/issues/1308
-      let mut p = tauri::api::path::resource_dir().expect("get resource dir");
+      let mut p = resource_dir.clone();
       p.push("models");
       p.push("audo-realtime-denoiser.v1.ts");
-      match env::var("APPDIR") {
-        Ok(v) => {
-          let mut root = PathBuf::from(v);
-          if p.has_root() {
-            // only on linux here
-            root.push(
-              p.strip_prefix("/")
-                .expect("Should be able to strip / from rooted path"),
-            );
-          } else {
-            root.push(p);
-          }
-          root.into_os_string()
-        }
-        Err(_) => p.into_os_string(),
-      }
+      p
     }
     Ok(p) => p.into(),
   };
+
+  let mut runtime_lib_path = resource_dir.clone();
+  runtime_lib_path.push("native");
+  runtime_lib_path.push("runtime_libs");
 
   let mut sock_path = tauri::api::path::runtime_dir().expect("get runtime dir");
   sock_path.push("magic-mic.socket");
@@ -299,6 +312,7 @@ fn main() {
     UnixListener::bind(sock_path.clone().into_os_string()).expect("Couldn't bind to unix socket");
 
   Command::new(server_path)
+    .env("LD_LIBRARY_PATH", runtime_lib_path.into_os_string())
     .arg(sock_path.clone().into_os_string())
     .arg(model_path)
     .stdin(Stdio::piped())

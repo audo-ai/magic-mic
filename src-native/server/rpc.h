@@ -1,7 +1,7 @@
 #pragma once
 #include <optional>
 
-#include <nlohmann/json.hpp>
+#include "nlohmann/json.hpp"
 
 using json = nlohmann::json;
 using std::optional;
