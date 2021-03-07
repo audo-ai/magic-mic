@@ -102,8 +102,7 @@ const App = () => {
 	       <img id="logo" src={logo} />
 	       <DeviceSelector title="Microphone" icon={mic} devices={devices} switchToDevice={(v) => promisified({cmd: "setMicrophone", value: v})}/>
 	       <DeviceSelector title="Speakers" icon={speaker} devices={[{name:"Speakers - System Default", id:0}]} />
-	       <input type="checkbox" value={loopback} onChange={() => setLoopback(!loopback)} name="test"/>
-	       <label for="test" id="test"> Test Noise Cancellation </label>
+	       <p id="loopback" onClick={() => setLoopback(!loopback)}> {loopback ? "Stop listening to yourself" : "Listen in on yourself"} </p>
 	   </div>;
 }
 
