@@ -116,7 +116,7 @@ private:
   const char *source = nullptr;
   const char *client_name = "Client Name";
   const int target_latency = 0;
-  const size_t buffer_length = 2048;
+  const size_t buffer_length = 16000;
   const pa_sample_spec shared_sample_spec = {
       .format = PA_SAMPLE_FLOAT32LE,
       .rate = 16000,
