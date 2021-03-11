@@ -70,14 +70,28 @@ const DeviceSelector = ({title, icon, devices, switchToDevice}) => {
 const App = () => {
     const [devices, setDevices] = useState([]);
     const [loopback, setLoopback] = useState(false);
+    const [status, setStatus] = useState("Waiting");
+    const [statusInterval, setStatusInterval] = useState(null);
     useEffect(() => {
-	// TODO: Handle errors
-	setInterval(() => {
+	// This clear interval stuff is definetly broken. Need to fix it
+	if (statusInterval) {
+	    clearInterval(statusInterval);
+	}
+	setStatusInterval(setInterval(() => {
 	    promisified({cmd: "getStatus"})
-		.then((v) => log(`getStatus response: "${JSON.stringify(v)}"`, TRACE))
+		.then((v) => {
+		    if (v === true) {
+			setStatus("Good");
+		    } else if (status === "Good"){
+			setStatus("Lost");
+		    } else {
+			setStatus("Failed");
+		    }
+		    log(`getStatus response: "${JSON.stringify(v)}"`, TRACE)
+		})
 		.catch((v) => log(`getStatus error: "${JSON.stringify(v)}"`, ERROR))
-	}, 10000);
-    }, []);
+	}, 10000));
+    }, [status]);
     useEffect(() => {
 	promisified({cmd: "getMicrophones"})
 	    .then((v) => {
@@ -98,13 +112,29 @@ const App = () => {
 	}
     }, [loopback, devices]);
 
-    return <div id="main-container">
-	       <img id="logo" src={logo} />
-	       <DeviceSelector title="Microphone" icon={mic} devices={devices} switchToDevice={(v) => promisified({cmd: "setMicrophone", value: v})}/>
-	       <DeviceSelector title="Speakers" icon={speaker} devices={[{name:"Speakers - System Default", id:0}]} />
-	       <input type="checkbox" value={loopback} onChange={() => setLoopback(!loopback)} name="test"/>
-	       <label for="test" id="test"> Test Noise Cancellation </label>
-	   </div>;
+    switch (status) {
+    case "Good":
+	return <div id="main-container">
+		   <img id="logo" src={logo} />
+		   <DeviceSelector title="Microphone" icon={mic} devices={devices} switchToDevice={(v) => promisified({cmd: "setMicrophone", value: v})}/>
+		   <DeviceSelector title="Speakers" icon={speaker} devices={[{name:"Speakers - System Default", id:0}]} />
+		   <p id="loopback" onClick={() => setLoopback(!loopback)}> {loopback ? "Stop" : "Check audio"} </p>
+	       </div>;
+    case "Failed":
+	return <div id="error-container">
+		   <h1> Failed to create virtual microphone, please restart the app. If
+		   that doesn't work, contact us </h1>
+	       </div>;
+    case "Lost":
+	return <div id="error-container">
+		   <h1> Lost connection to virtual microphone! Please restart
+		   the app. If that doesn't work, contact us </h1>
+	       </div>;
+    case "Waiting":
+	return <div id="error-container">
+		   <h1> Loading... </h1>
+	       </div>;
+    }
 }
 
 ReactDOM.render(
