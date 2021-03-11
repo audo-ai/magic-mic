@@ -78,7 +78,7 @@ void PipeSourceVirtualMic::run() {
       willspew = denoiser.willspew();
     }
     // block when we won't spew
-    if ((err = pa_mainloop_iterate(mainloop.get(), 0 == willspew, NULL)) < 0) {
+    if ((err = pa_mainloop_iterate(mainloop.get(), 0 == willspew || write_idx != read_idx, NULL)) < 0) {
       stringstream ss;
       ss << "pa_mainloop_iterate: " << pa_strerror(err);
       throw std::runtime_error(ss.str());
@@ -143,19 +143,8 @@ void PipeSourceVirtualMic::run() {
     exception_promise.set_value(std::current_exception());
   }
 }
-void PipeSourceVirtualMic::module_info_cb(pa_context *c, const pa_module_info *i, int eol, void *u) {
-  PipeSourceVirtualMic *m = (PipeSourceVirtualMic *)u;
-  if (!i || m->state != WaitCheckModuleLoaded) {
-    return;
-  }
-  if (string(i->name) == "module-pipe-source") {
-    // We should try to derive this from the actual module if possible
-    m->pipe_file_name = "/tmp/virtmic";
-    m->pipesource_module_idx = i->index;
-  }
-}
 void PipeSourceVirtualMic::check_module_loaded() {
-  module_load_operation = pa_context_get_module_info_list(ctx.get(), module_info_cb, this);
+  module_load_operation = pa_context_get_source_info_list(ctx.get(), source_info_cb, this);
   changeState(WaitCheckModuleLoaded);
 }
 void PipeSourceVirtualMic::set_microphone() {
@@ -169,36 +158,49 @@ void PipeSourceVirtualMic::set_microphone() {
   }
 }
 void PipeSourceVirtualMic::source_info_cb(pa_context *c, const pa_source_info *i, int eol, void *u) {
-  PipeSourceVirtualMic* m = (PipeSourceVirtualMic *)u;
-  switch (m->cur_act.action) {
-  case CurrentAction::SetMicrophone:
-    if (i) {
-      m->cur_act.set_mic.name = string(i->name);
-      m->source = m->cur_act.set_mic.name.c_str();
-      m->cur_act.set_mic.state = SetMicrophone::SetMicrophoneActionState::UpdatingStream;
-      m->state = State::InitRecStream;
-    } else if (m->cur_act.set_mic.state != SetMicrophone::SetMicrophoneActionState::UpdatingStream) {
-      // This cannot be the best way to do this
-      m->cur_act.action = CurrentAction::NoAction;
-      try {
-	throw std::runtime_error("Source not found");
-      } catch (...) {
-	m->cur_act.set_mic.p.set_exception(std::current_exception());
+  PipeSourceVirtualMic *m = (PipeSourceVirtualMic *)u;
+  if (m->state == WaitCheckModuleLoaded) {
+    if (!i) {
+      return;
+    }
+    if (string(i->name) == "virtmic") {
+      // We should try to derive this from the actual module if possible
+      m->pipe_file_name = "/tmp/virtmic";
+      m->pipesource_module_idx = i->owner_module;
+    }
+  } else {
+    switch (m->cur_act.action) {
+    case CurrentAction::SetMicrophone:
+      if (i) {
+	m->cur_act.set_mic.name = string(i->name);
+	m->source = m->cur_act.set_mic.name.c_str();
+	m->cur_act.set_mic.state =
+	    SetMicrophone::SetMicrophoneActionState::UpdatingStream;
+	m->state = State::InitRecStream;
+      } else if (m->cur_act.set_mic.state !=
+		 SetMicrophone::SetMicrophoneActionState::UpdatingStream) {
+	// This cannot be the best way to do this
+	m->cur_act.action = CurrentAction::NoAction;
+	try {
+	  throw std::runtime_error("Source not found");
+	} catch (...) {
+	  m->cur_act.set_mic.p.set_exception(std::current_exception());
+	}
       }
+      break;
+    case CurrentAction::GetMicrophones:
+      if (i && string(i->name) != "virtmic") {
+	m->cur_act.get_mics.list.push_back(
+	    std::make_pair(i->index, string(i->description)));
+      } else {
+	m->cur_act.get_mics.p.set_value(m->cur_act.get_mics.list);
+	pa_operation_unref(m->cur_act.get_mics.op);
+	m->cur_act.get_mics.state =
+	    GetMicrophones::GetMicrophonesActionState::Done;
+        m->cur_act.action = CurrentAction::NoAction;
+      }
+      break;
     }
-    break;
-  case CurrentAction::GetMicrophones:
-    if (i && string(i->name) != "virtmic") {
-      m->cur_act.get_mics.list.push_back(
-	  std::make_pair(i->index, string(i->description)));
-    } else {
-      m->cur_act.get_mics.p.set_value(m->cur_act.get_mics.list);
-      pa_operation_unref(m->cur_act.get_mics.op);
-      m->cur_act.get_mics.state =
-	  GetMicrophones::GetMicrophonesActionState::Done;
-      m->cur_act.action = CurrentAction::NoAction;
-    }
-    break;
   }
 }
 void PipeSourceVirtualMic::get_microphones() {
@@ -212,32 +214,58 @@ void PipeSourceVirtualMic::get_microphones() {
 }
 void PipeSourceVirtualMic::write_to_outputs() {
   size_t spew_size;
+  //logger->trace("Write, read: {}, {}", write_idx, read_idx);
   if ((spew_size = denoiser.willspew())) {
-    size_t spewed =
-	denoiser.spew(buffer, buffer_length);
+    size_t spewed;
+    if (spew_size > buffer_length - write_idx) {
+      float *temp_buffer = new float[spew_size];
+      spewed = denoiser.spew(temp_buffer, spew_size);
+
+      if (pb_state == PlaybackState::Loopback) {
+	pa_stream_write(pb_stream.get(), temp_buffer, sizeof(float)*spewed, nullptr, 0, PA_SEEK_RELATIVE);
+      }
+
+      size_t remaining_size = buffer_length - write_idx;
+      std::copy(temp_buffer, temp_buffer + remaining_size, buffer + write_idx);
+      std::copy(temp_buffer + remaining_size, temp_buffer + spew_size, buffer);
+      write_idx = spew_size - remaining_size;
+      delete[] temp_buffer;
+    } else {
+      spewed = denoiser.spew(buffer + write_idx, buffer_length - write_idx);
+      if (pb_state == PlaybackState::Loopback) {
+	pa_stream_write(pb_stream.get(), buffer + write_idx, sizeof(float)*spewed, nullptr, 0, PA_SEEK_RELATIVE);
+      }
+      write_idx = (write_idx + spewed) % buffer_length;
+    }
 
     // Let's hope that the playback buffer is long enough because maintaining a
     // seperate buffer seems annoying
-    if (pb_state == PlaybackState::Loopback) {
-      pa_stream_write(pb_stream.get(), buffer, sizeof(float)*spewed, nullptr, 0, PA_SEEK_RELATIVE);
+  }
+  size_t to_write;
+  if (read_idx > write_idx) {
+    to_write = buffer_length - read_idx;
+  } else if (write_idx > read_idx) {
+    to_write = write_idx - read_idx;
+  } else {
+    return;
+  }
+  //logger->trace("to_write: {}", sizeof(float)*to_write);
+  ssize_t written =
+    write(pipe_fd, buffer + read_idx, sizeof(float)*to_write);
+  if (written == -1) {
+    switch (errno) {
+    case EINTR:
+    case EAGAIN:
+      break;
+    default:
+      stringstream ss;
+      ss << "pa_mainloop_iterate, write: " << strerror(errno);
+      throw std::runtime_error(ss.str());
     }
-
-    ssize_t written =
-	write(pipe_fd, buffer, sizeof(float) * spewed);
-    if (written == -1) {
-      switch (errno) {
-      case EINTR:
-      case EAGAIN:
-	break;
-      default:
-	stringstream ss;
-	ss << "pa_mainloop_iterate, write: " << strerror(errno);
-	throw std::runtime_error(ss.str());
-      }
-    } else {
-      written /= sizeof(float);
-      read_idx = (written + read_idx) % buffer_length;
-    }
+  } else {
+    //logger->trace("written: {}", written);
+    written /= sizeof(float);
+    read_idx = (written + read_idx) % buffer_length;
   }
 }
 void PipeSourceVirtualMic::poll_context() {
@@ -425,7 +453,7 @@ PipeSourceVirtualMic::~PipeSourceVirtualMic() {
     logger->error("Error closing pipe_fd: {}", strerror(err));
   }
   err = 0;
-  delete buffer;
+  delete[] buffer;
   if (-1 != pipesource_module_idx && ctx && PA_CONTEXT_READY == pa_context_get_state(ctx.get())) {
     // TODO make this use logger when I get that
     logger->trace("Unloading module");
