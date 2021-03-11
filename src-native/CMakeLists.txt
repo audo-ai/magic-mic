@@ -12,6 +12,9 @@ find_package(Torch REQUIRED)
 target_link_libraries(denoiser "${TORCH_LIBRARIES}")
 set_property(TARGET denoiser PROPERTY CXX_STANDARD 14)
 
+add_executable(denoiser-test denoiser/main.cc)
+target_link_libraries(denoiser-test denoiser)
+
 # Build Server
 add_executable(server server/main.cc server/rpc.cc)
 set_property(TARGET server PROPERTY CXX_STANDARD 17)
