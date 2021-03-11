@@ -113,11 +113,32 @@ starts/stops removing noise
 {
 	"jsonrpc": "2.0",
 	"method": "setRemoveNoise",
+	"params": True,
 	"id": "exampleid"
 }
 ```
 #### Response
 *Results*: null
+```json
+{
+	"jsonrpc": "2.0",
+	"id": "exampleid"
+}
+```
+### `setLoopback`
+starts/stops loopback
+#### Request
+*Parameters*: bool
+```json
+{
+	"jsonrpc": "2.0",
+	"method": "setLoopback",
+	"params": True,
+	"id": "exampleid"
+}
+```
+#### Response
+*Results*: bool, success
 ```json
 {
 	"jsonrpc": "2.0",
