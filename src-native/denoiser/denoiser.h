@@ -25,8 +25,8 @@ class Denoiser {
   const int min_spew = hop_size;
 
  private:
-  static constexpr int valid_length = 596;
-  static constexpr int hop_size = 256;
+  int valid_length = 596;
+  int hop_size = 256;
 
   at::TensorOptions options;
 
