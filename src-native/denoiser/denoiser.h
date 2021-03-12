@@ -12,13 +12,14 @@ class Denoiser {
  public:
   Denoiser(std::string ts_path);
   // Takes an array of floats, and copies them to internal storage
-  void feed(float *in, std::size_t size);
+  void feed(float *in, size_t size);
   // Returns how much the model could spew if requested right now
-  std::size_t willspew();
+  size_t willspew();
   // Spews up to maxsize floats. For now will spew a multiple of valid_length
   // less than or equal to maxsize so maxsize must be greater than min_spew
-  std::size_t spew(float *out, std::size_t maxsize);
-  std::size_t get_size_multiple();
+  size_t spew(float *out, size_t maxsize);
+  size_t get_buffer_size();
+  void drop_samples(size_t size);
 
   bool should_denoise = false;
 

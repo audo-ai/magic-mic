@@ -26,7 +26,7 @@ Denoiser::Denoiser(std::string ts_path) : in(valid_length, 0.0) {
        torch::zeros(c10::IntArrayRef({1, 48, 4}), options),
        torch::zeros(c10::IntArrayRef({1, 1, 4}), options)});
 }
-void Denoiser::feed(float *arr, std::size_t size) {
+void Denoiser::feed(float *arr, size_t size) {
   in.insert<float*>(in.end(), arr, arr+size);
   std.feed(arr, size);
 }
@@ -41,7 +41,7 @@ size_t Denoiser::willspew() {
   ssize_t would_spew = (hop_size)*((in.size() - valid_length)/hop_size + 1);
   return would_spew > 0 ? would_spew : 0;
 }
-std::size_t Denoiser::spew(float *out, std::size_t maxsize) {
+size_t Denoiser::spew(float *out, size_t maxsize) {
   int written = 0;
   if (!should_denoise) {
     written = maxsize;
@@ -80,4 +80,13 @@ std::size_t Denoiser::spew(float *out, std::size_t maxsize) {
     in.erase(in.begin(), in.begin() + written);
   }
   return written;
+}
+size_t Denoiser::get_buffer_size() {
+  return in.size();
+}
+void Denoiser::drop_samples(size_t samples) {
+  if (samples >= in.size()) {
+    samples = in.size();
+  }
+  in.erase(in.begin(), in.begin() + samples);
 }
