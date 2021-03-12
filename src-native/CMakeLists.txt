@@ -6,7 +6,9 @@ set(VIRTMIC_ENGINE CACHE STRING "which virtual mic engine should be built")
 set_property(CACHE VIRTMIC_ENGINE PROPERTY STRINGS "PIPESOURCE")
 
 # Build Denoiser
-add_library(denoiser SHARED denoiser/denoiser.cc denoiser/running_std.cc)
+# audo-denoiser-v1.cpp is a generated file
+add_library(denoiser SHARED denoiser/denoiser.cc denoiser/running_std.cc
+  denoiser/audo-denoiser-v1.cpp)
 
 find_package(Torch REQUIRED)
 target_link_libraries(denoiser "${TORCH_LIBRARIES}")

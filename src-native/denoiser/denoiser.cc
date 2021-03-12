@@ -1,8 +1,11 @@
 #include <cassert>
+#include <sstream>
 
 #include "denoiser.h"
 
-Denoiser::Denoiser(std::string ts_path) : in(valid_length, 0.0) {
+
+using std::stringstream;
+Denoiser::Denoiser() : in(valid_length, 0.0) {
   options = torch::TensorOptions()
     .dtype(torch::kFloat32)
     .layout(torch::kStrided)
@@ -10,7 +13,10 @@ Denoiser::Denoiser(std::string ts_path) : in(valid_length, 0.0) {
     .requires_grad(false);
   try {
     // Deserialize the ScriptModule from a file using torch::jit::load().
-    module = torch::jit::load(ts_path);
+    const bin2cpp::File &model = bin2cpp::getTorchScriptFile();
+    stringstream ss;
+    ss.write(model.getBuffer(), model.getSize());
+    module = torch::jit::load(ss);
   }
   catch (const c10::Error& e) {
     throw std::runtime_error(e.msg());

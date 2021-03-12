@@ -13,7 +13,7 @@ int main(int argc, char **argv) {
     in.push_back(data);
   }
   std::cout << "read: "<<in.size() << std::endl;
-  Denoiser denoiser("/home/gabe/code/audo/project-x/src-tauri/models/audo-realtime-denoiser.v1.ts");
+  Denoiser denoiser;
   denoiser.feed(&*in.begin(), in.size());
   float *buf = new float[in.size()];
   denoiser.should_denoise =true;

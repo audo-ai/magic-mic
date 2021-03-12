@@ -6,11 +6,12 @@
 #include <torch/script.h>
 
 #include "running_std.h"
+#include "audo-denoiser-v1.h"
 
 // TODO make this  
 class Denoiser {
  public:
-  Denoiser(std::string ts_path);
+  Denoiser();
   // Takes an array of floats, and copies them to internal storage
   void feed(float *in, size_t size);
   // Returns how much the model could spew if requested right now

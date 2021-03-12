@@ -33,8 +33,8 @@ class PipeSourceVirtualMic;
 class PipeSourceVirtualMic : public VirtualMic {
 public:
   // TODO Need to implement copy constructors
-  PipeSourceVirtualMic(string model_path);
-  PipeSourceVirtualMic(string model_path, std::shared_ptr<spdlog::logger> logger);
+  PipeSourceVirtualMic();
+  PipeSourceVirtualMic(std::shared_ptr<spdlog::logger> logger);
   // threads aren't copyable, so neiter is this
   PipeSourceVirtualMic(PipeSourceVirtualMic &) = delete;
   ~PipeSourceVirtualMic();
