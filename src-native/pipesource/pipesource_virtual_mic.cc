@@ -111,6 +111,11 @@ void PipeSourceVirtualMic::run() {
       poll_recording_stream();
       break;
     case Denoise:
+      if (denoiser.get_buffer_size() > max_denoiser_buffer) {
+	logger->trace("Cutting buffer from {} to ", denoiser.get_buffer_size(),
+		      max_denoiser_buffer);
+        denoiser.drop_samples(denoiser.get_buffer_size() - max_denoiser_buffer);
+      }
       poll_recording_stream();
       write_to_outputs();
       break;
@@ -216,6 +221,7 @@ void PipeSourceVirtualMic::write_to_outputs() {
   size_t spew_size;
   //logger->trace("Write, read: {}, {}", write_idx, read_idx);
   if ((spew_size = denoiser.willspew())) {
+    spew_size = spew_size > buffer_length ? buffer_length : spew_size;
     size_t spewed;
     if (spew_size > buffer_length - write_idx) {
       float *temp_buffer = new float[spew_size];
