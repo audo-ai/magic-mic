@@ -130,8 +130,8 @@ int main(int argc, char **argv) {
   auto logger = spdlog::stderr_color_mt("server");
   //spdlog::register_logger(logger);
 
-  if (argc != 3) {
-    logger->error("USAGE: {} SOCK_PATH MODEL_PATH", argv[0]);
+  if (argc != 2) {
+    logger->error("USAGE: {} SOCK_PATH", argv[0]);
     return 1;
   }
 
@@ -155,7 +155,7 @@ int main(int argc, char **argv) {
   logger->info("Starting {} virtual mic", VIRTUAL_MIC_NAME);
   auto l = spdlog::stderr_color_mt("virtmic");
   l->set_level(spdlog::level::trace);
-  ConcreteVirtualMic mic(argv[2], l);
+  ConcreteVirtualMic mic(l);
   auto err_fut = mic.get_exception_future();
 
   stringstream ss;

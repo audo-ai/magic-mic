@@ -21,7 +21,7 @@
         "icons/icon.icns",
         "icons/icon.ico"
       ],
-      "resources": ["models/", "native/runtime_libs"],
+      "resources": ["native/runtime_libs"],
       "externalBin": ["native/server"],
       "copyright": "",
       "category": "DeveloperTool",

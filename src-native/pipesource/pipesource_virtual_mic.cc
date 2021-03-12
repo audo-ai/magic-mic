@@ -23,8 +23,8 @@ using std::stringstream;
 // That gives a pretty good way to structure. I'm making some changes to make it
 // a little more cpp imo
 
-PipeSourceVirtualMic::PipeSourceVirtualMic(string path, std::shared_ptr<spdlog::logger> logger)
-    : denoiser(path),
+PipeSourceVirtualMic::PipeSourceVirtualMic(std::shared_ptr<spdlog::logger> logger)
+    : denoiser(),
       logger(logger),
       pipesource_module_idx(-1), module_load_operation(nullptr),
       state(InitContext), pb_state(PlaybackState::StreamEmpty), cur_act() {
@@ -42,9 +42,8 @@ PipeSourceVirtualMic::PipeSourceVirtualMic(string path, std::shared_ptr<spdlog::
   exception_promise = promise<std::exception_ptr>();
   async_thread = thread(&PipeSourceVirtualMic::run, this);
 }
-PipeSourceVirtualMic::PipeSourceVirtualMic(string path)
-    : PipeSourceVirtualMic(
-	  path, spdlog::create<spdlog::sinks::null_sink_st>("virtmic_null")) {}
+PipeSourceVirtualMic::PipeSourceVirtualMic()
+    : PipeSourceVirtualMic(spdlog::create<spdlog::sinks::null_sink_st>("virtmic_null")) {}
 
 void PipeSourceVirtualMic::changeState(State s) {
   logger->trace("Pipesource changing from state {} to state {}", state, s);
