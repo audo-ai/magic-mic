@@ -5,18 +5,6 @@ set(PULSEAUDIO_MODULE_PATH "/usr/lib/pulse-14.0/modules" CACHE PATH "path to the
 set(VIRTMIC_ENGINE CACHE STRING "which virtual mic engine should be built")
 set_property(CACHE VIRTMIC_ENGINE PROPERTY STRINGS "PIPESOURCE")
 
-# Build Denoiser
-# audo-denoiser-v1.cpp is a generated file
-add_library(denoiser SHARED denoiser/denoiser.cc denoiser/running_std.cc
-  denoiser/audo-denoiser-v1.cpp)
-
-find_package(Torch REQUIRED)
-target_link_libraries(denoiser "${TORCH_LIBRARIES}")
-set_property(TARGET denoiser PROPERTY CXX_STANDARD 14)
-
-add_executable(denoiser-test denoiser/main.cc)
-target_link_libraries(denoiser-test denoiser)
-
 # Build Server
 add_executable(server server/main.cc server/rpc.cc)
 set_property(TARGET server PROPERTY CXX_STANDARD 17)
@@ -38,6 +26,9 @@ if(${VIRTMIC_ENGINE} STREQUAL "PIPESOURCE")
   target_include_directories(pipesource PRIVATE ${PULSEAUDIO_INCLUDE_DIR})
   target_link_libraries(pipesource ${PULSEAUDIO_LIBRARY})
 
+  # Unfortuanately, I can't figure out how to have the torch targets exported
+  # from denoiser, so we have to reinclude the package here 
+  find_package(Torch REQUIRED)
   target_link_libraries(pipesource denoiser spdlog::spdlog)
 
   target_link_libraries(server pipesource)
