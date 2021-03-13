@@ -23,8 +23,8 @@ using std::stringstream;
 // That gives a pretty good way to structure. I'm making some changes to make it
 // a little more cpp imo
 
-PipeSourceVirtualMic::PipeSourceVirtualMic(string path, std::shared_ptr<spdlog::logger> logger)
-    : denoiser(path),
+PipeSourceVirtualMic::PipeSourceVirtualMic(std::shared_ptr<spdlog::logger> logger)
+    : denoiser(),
       logger(logger),
       pipesource_module_idx(-1), module_load_operation(nullptr),
       state(InitContext), pb_state(PlaybackState::StreamEmpty), cur_act() {
@@ -42,9 +42,8 @@ PipeSourceVirtualMic::PipeSourceVirtualMic(string path, std::shared_ptr<spdlog::
   exception_promise = promise<std::exception_ptr>();
   async_thread = thread(&PipeSourceVirtualMic::run, this);
 }
-PipeSourceVirtualMic::PipeSourceVirtualMic(string path)
-    : PipeSourceVirtualMic(
-	  path, spdlog::create<spdlog::sinks::null_sink_st>("virtmic_null")) {}
+PipeSourceVirtualMic::PipeSourceVirtualMic()
+    : PipeSourceVirtualMic(spdlog::create<spdlog::sinks::null_sink_st>("virtmic_null")) {}
 
 void PipeSourceVirtualMic::changeState(State s) {
   logger->trace("Pipesource changing from state {} to state {}", state, s);
@@ -111,6 +110,11 @@ void PipeSourceVirtualMic::run() {
       poll_recording_stream();
       break;
     case Denoise:
+      if (denoiser.get_buffer_size() > max_denoiser_buffer) {
+	logger->trace("Cutting buffer from {} to ", denoiser.get_buffer_size(),
+		      max_denoiser_buffer);
+        denoiser.drop_samples(denoiser.get_buffer_size() - max_denoiser_buffer);
+      }
       poll_recording_stream();
       write_to_outputs();
       break;
@@ -216,6 +220,7 @@ void PipeSourceVirtualMic::write_to_outputs() {
   size_t spew_size;
   //logger->trace("Write, read: {}, {}", write_idx, read_idx);
   if ((spew_size = denoiser.willspew())) {
+    spew_size = spew_size > buffer_length ? buffer_length : spew_size;
     size_t spewed;
     if (spew_size > buffer_length - write_idx) {
       float *temp_buffer = new float[spew_size];

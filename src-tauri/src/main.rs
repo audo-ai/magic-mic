@@ -28,6 +28,7 @@ fn get_message<R: Read>(r: &mut R) -> JSONRpcResp {
   let mut str = String::from("");
   let mut arr = [0; 256];
   loop {
+    // TODO handle this error
     let res = r.read(&mut arr).expect("Read should succeed");
     if res != 0 {}
     for i in 0..res {
@@ -284,20 +285,10 @@ fn main() {
 
   let resource_dir = get_real_resource_dir().expect("resource dir required");
 
-  let model_path = match env::var("MODEL_PATH") {
-    Err(_) => {
-      // Check https://github.com/tauri-apps/tauri/issues/1308
-      let mut p = resource_dir.clone();
-      p.push("models");
-      p.push("audo-realtime-denoiser.v1.ts");
-      p
-    }
-    Ok(p) => p.into(),
-  };
-
   let mut runtime_lib_path = resource_dir.clone();
   runtime_lib_path.push("native");
   runtime_lib_path.push("runtime_libs");
+  info!("Setting LD_LIBRARY_PATH to {:?}", runtime_lib_path.clone().into_os_string());
 
   let mut sock_path = tauri::api::path::runtime_dir().expect("get runtime dir");
   sock_path.push("magic-mic.socket");
@@ -314,7 +305,6 @@ fn main() {
   Command::new(server_path)
     .env("LD_LIBRARY_PATH", runtime_lib_path.into_os_string())
     .arg(sock_path.clone().into_os_string())
-    .arg(model_path)
     .stdin(Stdio::piped())
     .stdout(Stdio::piped())
     .stderr(Stdio::inherit())

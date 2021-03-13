@@ -33,8 +33,8 @@ class PipeSourceVirtualMic;
 class PipeSourceVirtualMic : public VirtualMic {
 public:
   // TODO Need to implement copy constructors
-  PipeSourceVirtualMic(string model_path);
-  PipeSourceVirtualMic(string model_path, std::shared_ptr<spdlog::logger> logger);
+  PipeSourceVirtualMic();
+  PipeSourceVirtualMic(std::shared_ptr<spdlog::logger> logger);
   // threads aren't copyable, so neiter is this
   PipeSourceVirtualMic(PipeSourceVirtualMic &) = delete;
   ~PipeSourceVirtualMic();
@@ -116,7 +116,8 @@ private:
   const char *source = nullptr;
   const char *client_name = "Client Name";
   const int target_latency = 0;
-  const size_t buffer_length = 16000;
+  const size_t buffer_length = 1600;
+  const size_t max_denoiser_buffer = 16000;
   const pa_sample_spec shared_sample_spec = {
       .format = PA_SAMPLE_FLOAT32LE,
       .rate = 16000,
