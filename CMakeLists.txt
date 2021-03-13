@@ -3,6 +3,9 @@ cmake_minimum_required(VERSION 3.10)
 # set the project name
 project(magic-mic)
 
+set(LIBDENOISER_DIR "" CACHE PATH "path to libdenoiser project")
+add_subdirectory(${LIBDENOISER_DIR} "./_deps/libdenoiser-build")
+
 # Dependencies
 include(FetchContent)
 
@@ -21,16 +24,6 @@ if(NOT json_POPULATED)
 
   set(JSON_BuildTests OFF CACHE BOOL "Build json test, we don't want to do that")
   add_subdirectory(${json_SOURCE_DIR} ${json_BINARY_DIR} EXCLUDE_FROM_ALL)
-endif()
-
-FetchContent_Declare(libtorch
-  URL https://download.pytorch.org/libtorch/cpu/libtorch-cxx11-abi-shared-with-deps-1.8.0%2Bcpu.zip
-  URL_HASH SHA224=fa02e8a38b8c0466559b22fb8d5f1b21e9e4b435c4cdaefd2d83b36c)
-
-if (NOT libtorch_POPULATED)
-  FetchContent_Populate(libtorch)
-
-  list(APPEND CMAKE_PREFIX_PATH ${libtorch_SOURCE_DIR})
 endif()
 
 FetchContent_Declare(spdlog
