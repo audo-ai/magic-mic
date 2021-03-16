@@ -4,7 +4,6 @@ cmake_minimum_required(VERSION 3.10)
 project(magic-mic)
 
 set(LIBDENOISER_DIR "" CACHE PATH "path to libdenoiser project")
-add_subdirectory(${LIBDENOISER_DIR} "./_deps/libdenoiser-build")
 
 # Dependencies
 include(FetchContent)
@@ -37,12 +36,18 @@ if (NOT spdlog_POPULATED)
   add_subdirectory(${spdlog_SOURCE_DIR} ${spdlog_BINARY_DIR})
 endif()
 
+# Needs to be after fetch contents so _deps exists
+add_subdirectory(${LIBDENOISER_DIR} "./_deps/libdenoiser-build")
+
 add_subdirectory(src-native)
 
 if (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
   #TOOD MAke depend on server
+  set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -s")
+  set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -s")
+
   set_target_properties(server PROPERTIES SUFFIX "-x86_64-unknown-linux-gnu")
-  set(LIBS_TO_COPY "libpipesource,libspdlog,libdenoiser,libtorch,libtorch_cpu,libc10,libgomp-75eea7e8.so.1")
+  set(LIBS_TO_COPY "libpipesource,libspdlog")
   add_custom_target(bundle_tauri ALL
     COMMAND ${CMAKE_COMMAND} -E make_directory "runtime_libs"
     COMMAND ../scripts/get_shared_library_deps.sh $<TARGET_FILE:server> "runtime_libs" "${LIBS_TO_COPY}")

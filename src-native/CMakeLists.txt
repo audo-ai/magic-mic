@@ -21,18 +21,21 @@ target_link_libraries(server nlohmann_json::nlohmann_json spdlog::spdlog)
 if(${VIRTMIC_ENGINE} STREQUAL "PIPESOURCE")
   add_library(pipesource SHARED pipesource/pipesource_virtual_mic.cc)
 
-  target_include_directories(pipesource PRIVATE denoiser/ common/)
+  target_include_directories(pipesource PRIVATE common/)
   find_package(PulseAudio REQUIRED)
   target_include_directories(pipesource PRIVATE ${PULSEAUDIO_INCLUDE_DIR})
-  target_link_libraries(pipesource ${PULSEAUDIO_LIBRARY})
+  target_link_libraries(pipesource PRIVATE ${PULSEAUDIO_LIBRARY})
 
-  # Unfortuanately, I can't figure out how to have the torch targets exported
-  # from denoiser, so we have to reinclude the package here 
-  find_package(Torch REQUIRED)
-  target_link_libraries(pipesource denoiser spdlog::spdlog)
+  target_link_libraries(pipesource PRIVATE spdlog::spdlog)
+  # We don't want to link with denoiser (because of shared vs. static library
+  # problems, but we do want dependencies to, and we do need its includes, so we
+  # do this. Maybe we could just link the server with denoiser, but this way
+  # server doesn't have to worry about these dependencies
+  target_link_libraries(pipesource INTERFACE denoiser)
+  target_include_directories(pipesource PRIVATE "$<TARGET_PROPERTY:denoiser,INCLUDE_DIRECTORIES>")
 
   target_link_libraries(server pipesource)
-  target_include_directories(server PRIVATE pipesource/ denoiser/)
+  target_include_directories(server PRIVATE pipesource/ denoiser)
   set_property(TARGET server PROPERTY COMPILE_DEFINITIONS USE_PIPESOURCE)
 else()
   get_property(TEMP CACHE VIRTMIC_ENGINE PROPERTY STRINGS)
@@ -59,8 +62,7 @@ if (${BUILD_MODULE})
 
   target_compile_options(module-magic-mic PRIVATE -fpermissive)
 
-  target_include_directories(module-magic-mic PRIVATE denoiser/)
-  target_link_libraries(module-magic-mic denoiser)
+  target_include_directories(module-magic-mic PRIVATE)
 
   install(TARGETS module-magic-mic DESTINATION ${PULSEAUDIO_MODULE_PATH})
 endif()
