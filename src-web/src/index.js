@@ -71,13 +71,9 @@ const App = () => {
     const [devices, setDevices] = useState([]);
     const [loopback, setLoopback] = useState(false);
     const [status, setStatus] = useState("Waiting");
-    const [statusInterval, setStatusInterval] = useState(null);
     useEffect(() => {
 	// This clear interval stuff is definetly broken. Need to fix it
-	if (statusInterval) {
-	    clearInterval(statusInterval);
-	}
-	setStatusInterval(setInterval(() => {
+	const cb = () => {
 	    promisified({cmd: "getStatus"})
 		.then((v) => {
 		    if (v === true) {
@@ -90,7 +86,22 @@ const App = () => {
 		    log(`getStatus response: "${JSON.stringify(v)}"`, TRACE)
 		})
 		.catch((v) => log(`getStatus error: "${JSON.stringify(v)}"`, ERROR))
-	}, 10000));
+		.finally((v) => {
+		    let time = 10000;
+		    switch (status){
+		    case "Good":
+			time = 10000;
+			break;
+		    case "Waiting":
+			time = 500;
+		    case "Lost":
+		    case "Failed":
+			return;
+		    }
+		    setTimeout(cb, time);
+		});
+	}
+	cb()
     }, [status]);
     useEffect(() => {
 	promisified({cmd: "getMicrophones"})
@@ -117,7 +128,7 @@ const App = () => {
 	return <div id="main-container">
 		   <img id="logo" src={logo} />
 		   <DeviceSelector title="Microphone" icon={mic} devices={devices} switchToDevice={(v) => promisified({cmd: "setMicrophone", value: v})}/>
-		   <DeviceSelector title="Speakers" icon={speaker} devices={[{name:"Speakers - System Default", id:0}]} />
+		   {/*<DeviceSelector title="Speakers" icon={speaker} devices={[{name:"Speakers - System Default", id:0}]} /> */}
 		   <p id="loopback" onClick={() => setLoopback(!loopback)}> {loopback ? "Stop" : "Check audio"} </p>
 	       </div>;
     case "Failed":
