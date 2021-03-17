@@ -111,9 +111,9 @@ void PipeSourceVirtualMic::run() {
       break;
     case Denoise:
       if (denoiser.get_buffer_size() > max_denoiser_buffer) {
-	logger->trace("Cutting buffer from {} to ", denoiser.get_buffer_size(),
-		      max_denoiser_buffer);
-        denoiser.drop_samples(denoiser.get_buffer_size() - max_denoiser_buffer);
+	logger->trace("Cutting buffer from {} to {}", denoiser.get_buffer_size(),
+		      max_denoiser_buffer/2);
+        denoiser.drop_samples(denoiser.get_buffer_size() - max_denoiser_buffer/2);
       }
       poll_recording_stream();
       write_to_outputs();
