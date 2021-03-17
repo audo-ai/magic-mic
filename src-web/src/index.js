@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom';
 
 import { invoke, promisified } from 'tauri/api/tauri'
 import { listen } from 'tauri/api/event'
+import { open } from 'tauri/api/window';
 
 import './main.scss';
 import './device_selector.scss';
@@ -129,7 +130,10 @@ const App = () => {
 		   <img id="logo" src={logo} />
 		   <DeviceSelector title="Microphone" icon={mic} devices={devices} switchToDevice={(v) => promisified({cmd: "setMicrophone", value: v})}/>
 		   {/*<DeviceSelector title="Speakers" icon={speaker} devices={[{name:"Speakers - System Default", id:0}]} /> */}
-		   <p id="loopback" onClick={() => setLoopback(!loopback)}> {loopback ? "Stop" : "Test Noise Cancellation"} </p>
+		   <div id="bottom">
+		   <p id="loopback" onClick={() => setLoopback(!loopback)}> {loopback ? "Stop" : "Check Mic"} </p>
+		       <a onClick={() => open("https://magicmic.ai/feedback")} id="feedback"> Give us your feedback! </a>
+		   </div>
 	       </div>;
     case "Failed":
 	return <div id="error-container">

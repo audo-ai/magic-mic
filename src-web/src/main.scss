@@ -33,13 +33,29 @@ body {
 	padding-top: 30px;
 	width: 20%;
     }
-    #loopback {
+    #bottom {
 	font-family: "AFontMedium";
 	font-size: 20px;
 	color: #f05742;
-	cursor: pointer;
 	padding-bottom: 20px;
 	margin: 0px;
+	display: flex;
+	align-items: center;
+	flex-direction: column;
+	* {
+	    margin: auto;
+	    margin-bottom: 10px;
+	    width: max-content;
+	}
+	#loopback {
+	    cursor: pointer;
+	}
+	#feedback {
+	    color: #aaa;
+	    cursor: pointer;
+	    text-decoration: underline;
+	    font-size: .8em;
+	}
     }
 }
 
