@@ -10,28 +10,36 @@
     font-family: "AFontRegular";
     src: url("fonts/Roboto-Regular.ttf");
 }
-
+html, body, #root {
+    height: 100%;
+    margin: 0px;
+    overflow: hidden;
+}
 body {
     background: #121212;
     color: white;
     font-family: "AFontRegular";
 }
 #main-container {
+    max-width: 400px;
+    max-height: 450px;
+    height: 100%;
     display: flex;
     flex-direction: column;
+    justify-content: space-between;
     align-items: center;
-    max-width: 400px;
     margin: auto;
-    margin-top: 20px;
     #logo {
+	padding-top: 30px;
 	width: 20%;
     }
     #loopback {
 	font-family: "AFontMedium";
 	font-size: 20px;
 	color: #f05742;
-	margin-top: 40px;
 	cursor: pointer;
+	padding-bottom: 20px;
+	margin: 0px;
     }
 }
 

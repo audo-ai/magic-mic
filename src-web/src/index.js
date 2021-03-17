@@ -48,7 +48,7 @@ const DeviceSelector = ({title, icon, devices, switchToDevice}) => {
 	    .catch((v) => log(`setShouldRemoveNoise error: "${JSON.stringify(v)}"`, ERROR));
     }, [remove]);
     return <div className="device-selector">
-	       <h1> {title} </h1>
+	       { /* <h1> {title} </h1> */ }
 	       <SelectWithImage options={devices.map((e) => e.name)}
 				image={icon}
 				chosen={device}
@@ -129,7 +129,7 @@ const App = () => {
 		   <img id="logo" src={logo} />
 		   <DeviceSelector title="Microphone" icon={mic} devices={devices} switchToDevice={(v) => promisified({cmd: "setMicrophone", value: v})}/>
 		   {/*<DeviceSelector title="Speakers" icon={speaker} devices={[{name:"Speakers - System Default", id:0}]} /> */}
-		   <p id="loopback" onClick={() => setLoopback(!loopback)}> {loopback ? "Stop" : "Check audio"} </p>
+		   <p id="loopback" onClick={() => setLoopback(!loopback)}> {loopback ? "Stop" : "Test Noise Cancellation"} </p>
 	       </div>;
     case "Failed":
 	return <div id="error-container">
