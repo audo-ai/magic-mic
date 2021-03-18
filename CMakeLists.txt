@@ -47,7 +47,7 @@ if (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
   set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -s")
 
   set_target_properties(server PROPERTIES SUFFIX "-x86_64-unknown-linux-gnu")
-  set(LIBS_TO_COPY "libpipesource,libspdlog")
+  set(LIBS_TO_COPY "libpipesource,libspdlog,libgomp")
   add_custom_target(bundle_tauri ALL
     COMMAND ${CMAKE_COMMAND} -E make_directory "runtime_libs"
     COMMAND ../scripts/get_shared_library_deps.sh $<TARGET_FILE:server> "runtime_libs" "${LIBS_TO_COPY}")
