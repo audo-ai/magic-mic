@@ -131,7 +131,7 @@ const App = () => {
 		   <DeviceSelector title="Microphone" icon={mic} devices={devices} switchToDevice={(v) => promisified({cmd: "setMicrophone", value: v})}/>
 		   {/*<DeviceSelector title="Speakers" icon={speaker} devices={[{name:"Speakers - System Default", id:0}]} /> */}
 		   <div id="bottom">
-		   <p id="loopback" onClick={() => setLoopback(!loopback)}> {loopback ? "Stop" : "Check Mic"} </p>
+		   <p id="loopback" onClick={() => setLoopback(!loopback)}> {loopback ? "Stop" : "Mic Check"} </p>
 		       <a onClick={() => open("https://magicmic.ai/feedback")} id="feedback"> Give us your feedback! </a>
 		   </div>
 	       </div>;
