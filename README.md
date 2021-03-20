@@ -1,41 +1,31 @@
-# Project-X
+# Magic Mic
 
-(I'll try to flesh this out later)
+This is the open source component of an app created by the folks at [audo.ai](https://audo.ai/) to provide easy access to a realtime version of our custom machine learning based noise removal tool (our main product is an audio denoising API). Just run the app, switch the microphone in whatever audio consuming app you are using (zoom, discord, google meet) to Magic Mic and you're off! This is still in **early** alpha and so is only available on linux for now. This is still in active development and so bug fixes and new features will be coming, along with OS X and Windows support in the future.
 
+## Open Source
+Our custom denoising model is proprietary and so at the moment it is not possible for individuals outside of audo to build this app from source. We plan to add support for building with something like [rnnoise](https://jmvalin.ca/demo/rnnoise/) in the future so anyone can contribute and build the app. 
 
 ## Structure
-Tauri forces us (I think) to use a `src-tauri` directory, so might as well be
-consistent and put the react frontend stuff in a `src-web` and the native stuff
-in a `src-native`
+With respect to building, this project has 3 components. First, there is the code in `src-native` which interacts with the audio system and actually creates the virtual microphone and does the denoising. Then there is the [tauri](https://tauri.studio/en/) code in `src-tauri` which deals with creating the system webview and interacting with the frontend code. The naming of these directories is somewhat misleading, because both the code in `src-native` and the code in `src-tauri` are compiled to native code. Additionaly, there is `src-web` which contains a `create-react-app` project which is displayed by tauri. 
+
+## Building
+### `src-native`
+As mentioned, at the moment this can only be built by us at audo because it relies on our proprietary denoiser. We plan on providing the option to use completely opensource components in the future.
+
+The rough outline for building is:
+```sh
+mkdir build
+cd build
+cmake -DCMAKE_PREFIX_PATH=... -DLIBDENOISER_DIR=... -DVIRTMIC_ENGINE="PIPESOURCE" ..
+make install # Copies files and libs over to the src-tauri directory, NOT to system directories
+```
+"PIPESOURCE" is the only virtmic engine available at the moment; in the future this may change for other platform or if we implement a custom pulseaudio module
 
 ## Frontend
-We're going with tauri!
-
-### Development
+First you need to install [tauri](https://tauri.studio/en/). Then you need to run `yarn` from the root directory and the `src-web` directory. From there, running the app should be as simple as running `yarn tauri dev`, however tauri has some bugs currently so you need to run
 ```sh
-yarn tauri dev
+# No rust logging
+SERVER_PATH="$PATH_TO_REPO/build/src-native/server-x86_64-unknown-linux-gnu" yarn tauri dev
+# With rust logging
+RUST_LOG=trace SERVER_PATH="$PATH_TO_REPO/build/src-native/server-x86_64-unknown-linux-gnu" yarn tauri dev
 ```
-### Building 
-```sh
-yarn tauri build
-```
-
-## Native Code
-
-This is the directory containing all of the native code for project-x.
-
-### Module
-This is a c++ implementation of a pulseaudio module. Puleaudio does not really
-support c++ plugins, so that leads to a bit of a hack (just having
-to wrap imports in `export "C"` because pulse doesn't do it for us).
-
-#### Building
-This module requires the denosier. Additionally it requires a pulseaudio source
-tree to build with (to give it access to internal headers). Use the cmake cache
-variables to configure it appropriatly.
-
-### Denoiser
-A library that will hopefully be used as a cross platform denosier engine. Still
-in progress. Building setting `-DCMAKE_PREFIX_PATH` to the path to libtorch.
-
-### pipesource-mvp
