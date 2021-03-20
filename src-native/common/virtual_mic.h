@@ -18,7 +18,7 @@ public:
   virtual void stop() = 0;
   virtual void abortLastRequest() = 0;
   virtual future<bool> getStatus() = 0;
-  virtual future<vector<pair<int, string>>> getMicrophones() = 0;
+  virtual future<pair<int, vector<pair<int, string>>>> getMicrophones() = 0;
   virtual future<void> setMicrophone(int) = 0;
   virtual future<void> setRemoveNoise(bool) = 0;
   virtual future<bool> setLoopback(bool) = 0;

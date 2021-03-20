@@ -177,12 +177,12 @@ fn server_thread<T: Read + Write>(
         Cmd::GetMicrophones { callback, error } => {
           match rxtx_server(&mut server, get_microphones()) {
             JSONRpcResp {
-              result: Some(serde_json::Value::Array(v)),
+              result: Some(serde_json::Value::Object(m)),
               ..
             } => {
               // Todo verify v is of correct form
               _webview.dispatch(move |wv| {
-                tauri::execute_promise_sync(wv, move || Ok(v), callback, error);
+                tauri::execute_promise_sync(wv, move || Ok(m), callback, error);
               });
             }
             JSONRpcResp {

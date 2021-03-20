@@ -36,13 +36,20 @@ const SelectWithImage = ({options, image, chosen, setChosen}) => {
 	       </label>
 	   </div>;
 }
-const DeviceSelector = ({title, icon, devices, switchToDevice}) => {
-    let map = [];
+const DeviceSelector = ({title, current, icon, devices, switchToDevice}) => {
+    let map = {};
+    let cur;
     for (let i =0; i < devices.length; i++) {
 	map[devices[i].name] = devices[i].id;
+	if (devices[i].id === current) {
+	    cur = devices[i].name;
+	}
     }
     const [device, setDevice] = useState();
     const [remove, setRemove] = useState(false);
+    useEffect(() => {
+	setDevice(cur);
+    }, [current]);
     useEffect(() => {
 	promisified({cmd: "setShouldRemoveNoise", value: remove})
 	    .then((v) => log(`setShouldRemoveNoise response: "${JSON.stringify(v)}"`, TRACE))
@@ -54,6 +61,7 @@ const DeviceSelector = ({title, icon, devices, switchToDevice}) => {
 				image={icon}
 				chosen={device}
 				setChosen={(v) => {
+				    setDevice(v);
 				    switchToDevice(map[v])
 					.then((e) => log(`switchToDevice response: "${JSON.stringify(e)}"`, TRACE))
 					.catch((e) => log(`switchToDevice error: "${JSON.stringify(e)}"`, ERROR));
@@ -70,6 +78,7 @@ const DeviceSelector = ({title, icon, devices, switchToDevice}) => {
 
 const App = () => {
     const [devices, setDevices] = useState([]);
+    const [curDevice, setCurrentDevice] = useState();
     const [loopback, setLoopback] = useState(false);
     const [status, setStatus] = useState("Waiting");
     useEffect(() => {
@@ -107,7 +116,8 @@ const App = () => {
     useEffect(() => {
 	promisified({cmd: "getMicrophones"})
 	    .then((v) => {
-		setDevices(v);
+		setDevices(v["list"]);
+		setCurrentDevice(v["cur"]);
 		log(`getMicrophones response: "${JSON.stringify(v)}"`, TRACE)
 	    })
 	    .catch((v) =>
@@ -128,7 +138,7 @@ const App = () => {
     case "Good":
 	return <div id="main-container">
 		   <img id="logo" src={logo} />
-		   <DeviceSelector title="Microphone" icon={mic} devices={devices} switchToDevice={(v) => promisified({cmd: "setMicrophone", value: v})}/>
+		   <DeviceSelector title="Microphone" current={curDevice} icon={mic} devices={devices} switchToDevice={(v) => promisified({cmd: "setMicrophone", value: v})}/>
 		   {/*<DeviceSelector title="Speakers" icon={speaker} devices={[{name:"Speakers - System Default", id:0}]} /> */}
 		   <div id="bottom">
 		   <p id="loopback" onClick={() => setLoopback(!loopback)}> {loopback ? "Stop" : "Mic Check"} </p>

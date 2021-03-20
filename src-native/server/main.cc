@@ -70,16 +70,22 @@ json handle_request(ConcreteVirtualMic *mic, RPCRequest req) {
     return make_response(req.id, f.get());
   }
   case GetMicrophones: {
-    future<vector<pair<int, string>>> f = mic->getMicrophones();
+    future<pair<int, vector<pair<int, string>>>> f = mic->getMicrophones();
     try {
-      wait_on_future<vector<pair<int, string>>>(f);
+      wait_on_future<pair<int, vector<pair<int, string>>>>(f);
     } catch(interrupted_error &e) {
       return make_error(-32000, "Server error", "Interrupted while waiting for response");
     }
-    json resp = json::basic_json::array({});
-    for (auto &tuple : f.get()) {
-      resp.push_back({{"id", std::get<0>(tuple)}, {"name", std::get<1>(tuple)}});
+    auto val = f.get();
+
+    json list = json::basic_json::array({});
+    for (auto &tuple : std::get<1>(val)) {
+      list.push_back({{"id", std::get<0>(tuple)}, {"name", std::get<1>(tuple)}});
     }
+    json resp;
+    resp["list"] = list;
+    resp["cur"] = std::get<0>(val);
+
     return make_response(req.id, resp);
   }
   case SetMicrophone: {

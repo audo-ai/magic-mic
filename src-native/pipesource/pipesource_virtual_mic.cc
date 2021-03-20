@@ -194,10 +194,11 @@ void PipeSourceVirtualMic::source_info_cb(pa_context *c, const pa_source_info *i
       break;
     case CurrentAction::GetMicrophones:
       if (i && string(i->name) != "virtmic") {
-	m->cur_act.get_mics.list.push_back(
-	    std::make_pair(i->index, string(i->description)));
+	// This is probably not the best way to do this, but it should work for now
+	m->cur_act.get_mics.list.push_back(std::make_pair(i->index, string(i->description)));
       } else {
-	m->cur_act.get_mics.p.set_value(m->cur_act.get_mics.list);
+	int ind = pa_stream_get_device_index(m->rec_stream.get());
+        m->cur_act.get_mics.p.set_value(std::make_pair(ind, m->cur_act.get_mics.list));
 	pa_operation_unref(m->cur_act.get_mics.op);
 	m->cur_act.get_mics.state =
 	    GetMicrophones::GetMicrophonesActionState::Done;
@@ -500,7 +501,7 @@ future<bool> PipeSourceVirtualMic::getStatus() {
   return p.get_future();
 }
 
-future<vector<pair<int, string>>> PipeSourceVirtualMic::getMicrophones() {
+future<pair<int, vector<pair<int, string>>>> PipeSourceVirtualMic::getMicrophones() {
   lock_guard<mutex> lock(mainloop_mutex);
   if (state < InitRecStream) {
     throw std::runtime_error("Not ready to get Microphones");
@@ -510,9 +511,8 @@ future<vector<pair<int, string>>> PipeSourceVirtualMic::getMicrophones() {
     throw std::runtime_error("Can only handle single action at a time");
   }
   cur_act.action = CurrentAction::GetMicrophones;
-  cur_act.get_mics = {.state =
-			  GetMicrophones::GetMicrophonesActionState::Init,
-		      .p = promise<vector<pair<int, string>>>()};
+  cur_act.get_mics = {.state = GetMicrophones::GetMicrophonesActionState::Init,
+		      .p = promise<pair<int, vector<pair<int, string>>>>()};
   pa_mainloop_wakeup(mainloop.get());
   return cur_act.get_mics.p.get_future();
 }

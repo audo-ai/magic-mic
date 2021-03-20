@@ -42,7 +42,7 @@ public:
   void stop() override;
   void abortLastRequest() override;
   future<bool> getStatus() override;
-  future<vector<pair<int, string>>> getMicrophones() override;
+  future<pair<int, vector<pair<int, string>>>> getMicrophones() override;
   future<void> setMicrophone(int) override;
   future<void> setRemoveNoise(bool) override;
   future<bool> setLoopback(bool) override;
@@ -59,7 +59,7 @@ private:
     enum GetMicrophonesActionState state;
     pa_operation *op;
     vector<pair<int, string>> list;
-    promise<vector<pair<int, string>>> p;
+    promise<pair<int, vector<pair<int, string>>>> p;
   };
   struct SetMicrophone {
     enum SetMicrophoneActionState { InitGettingSource, WaitGettingSource, UpdatingStream };
