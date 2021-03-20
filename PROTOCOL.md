@@ -1,3 +1,5 @@
+**This is somewhat out of date and unclear and needs to be updated**
+
 # IPC Protocol
 
 I'll describe the electron/gui-native virtual mic protocol here. It's [JSON-RPC
