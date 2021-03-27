@@ -138,16 +138,22 @@ void write_json(int fd, json j) {
 void quit_tray_cb(struct tray_menu *menu) {
   *(bool*)menu->context = true;
 }
+void open_tray_cb(struct tray_menu *menu) {
+  *(bool*)menu->context = true;
+}
 int main(int argc, char **argv) {
   auto logger = spdlog::stderr_color_mt("server");
   //spdlog::register_logger(logger);
 
-  if (argc != 3) {
-    logger->error("USAGE: {} SOCK_PATH ICON_PATH", argv[0]);
+  if (argc != 4) {
+    logger->error("USAGE: {} SOCK_PATH ICON_PATH APP_PATH", argv[0]);
     return 1;
   }
+  char *sock_path = argv[1];
+  char *icon_path = argv[2];
+  char *app_path = argv[3];
 
-  unlink(argv[1]);
+  unlink(sock_path);
   
   int sock_fd = -1;
   int serv_fd = socket(AF_UNIX, SOCK_STREAM, 0);
@@ -158,7 +164,7 @@ int main(int argc, char **argv) {
   struct sockaddr_un addr;
   memset(&addr, 0, sizeof(addr));
   addr.sun_family = AF_UNIX;
-  strcpy(addr.sun_path, argv[1]);
+  strcpy(addr.sun_path, sock_path);
 
   if (-1 == bind(serv_fd, (sockaddr *)&addr, sizeof(addr))) {
     logger->error("bind(...): {}", strerror(errno));
@@ -173,11 +179,13 @@ int main(int argc, char **argv) {
   signal(SIGINT, handle_signal);
 
   bool tray_exit_requested = false;
+  bool open_app_requested = false;
   struct tray_menu menu[] = {{"Quit", 0, 0, quit_tray_cb, &tray_exit_requested},
-				   {nullptr, 0, 0, nullptr, nullptr}};
+			     {"Open", 0, 0, open_tray_cb, &open_app_requested},
+			     {nullptr, 0, 0, nullptr, nullptr}};
   struct tray tray = {
-      .icon = argv[2],
-      .menu = (struct tray_menu*)&menu,
+      .icon = icon_path,
+      .menu = (struct tray_menu *)&menu,
   };
   if (tray_init(&tray) < 0) {
     logger->error("Unable to create systray item");
@@ -230,7 +238,23 @@ int main(int argc, char **argv) {
 	logger->info("Cilent connected, not exiting yet");
 	tray_exit_requested = false;
 	menu[0].checked = 0;
+	menu[1].checked = 1;
 	tray_update(&tray);
+      }
+    }
+
+    if (open_app_requested) {
+      open_app_requested = false;
+      if (sock_fd == -1) {
+	logger->info("Starting app");
+	if (0 == fork()) {
+	  // child
+	  execl(app_path, nullptr);
+	} else {
+	  // parent
+	}
+      } else {
+	logger->error("Attempted to open app with connection active");
       }
     }
 
@@ -256,6 +280,8 @@ int main(int argc, char **argv) {
 	} else {
 	  fcntl(sock_fd, F_SETFL, O_NONBLOCK);
 	  menu[0].disabled = 1;
+	  menu[1].disabled = 1;
+	  menu[1].checked = 1;
 	  tray_update(&tray);
 	}
       }
@@ -289,6 +315,8 @@ int main(int argc, char **argv) {
 	logger->debug("Connection to socket closed");
 	sock_fd = -1;
 	menu[0].disabled = 0;
+	menu[1].disabled = 0;
+	menu[1].checked = 0;
 	tray_update(&tray);
       }
     }

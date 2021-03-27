@@ -3,10 +3,8 @@
   windows_subsystem = "windows"
 )]
 
-use anyhow;
 use std::{
   env,
-  fs::*,
   io::*,
   os::unix::net::UnixStream,
   path::PathBuf,
@@ -57,6 +55,12 @@ fn rxtx_server<T: Read + Write>(server: &mut T, req: JSONRpcReq) -> JSONRpcResp 
   );
   return r;
 }
+fn dispatch_and_execute<R: serde::Serialize + Send + 'static>(_webview: &mut tauri::WebviewMut, mess: R, callback: String, error: String) {
+  _webview.dispatch(move |wv| {
+    tauri::execute_promise_sync(wv, move || Ok(mess), callback, error)
+      .expect("expecute_promise_sync should suceed");
+  }).expect("dispatch should succeed");
+}
 fn server_thread<T: Read + Write>(
   mut server: T,
   rx: mpsc::Receiver<(tauri::WebviewMut, Cmd)>,
@@ -71,24 +75,13 @@ fn server_thread<T: Read + Write>(
               result: Some(serde_json::Value::Bool(b)),
               ..
             } => {
-              _webview.dispatch(move |wv| {
-                tauri::execute_promise_sync(wv, move || Ok(b), callback, error);
-              });
+	      dispatch_and_execute(&mut _webview, b, callback, error);
             }
             JSONRpcResp { error: Some(e), .. } => {
-              _webview.dispatch(move |wv| {
-                tauri::execute_promise_sync(wv, move || Ok(e), callback, error);
-              });
+	      dispatch_and_execute(&mut _webview, e, callback, error);
             }
             _ => {
-              _webview.dispatch(move |wv| {
-                tauri::execute_promise_sync(
-                  wv,
-                  move || Ok(String::from("Unknown error")),
-                  callback,
-                  error,
-                );
-              });
+	      dispatch_and_execute(&mut _webview, String::from("Unknown error"), callback, error);
             }
           };
         }
@@ -105,29 +98,13 @@ fn server_thread<T: Read + Write>(
           // println!("Server response: {}", serde_json::to_string(&r).unwrap());
           match rxtx_server(&mut server, set_should_remove_noise(value)) {
             JSONRpcResp { result: None, .. } => {
-              _webview.dispatch(move |wv| {
-                tauri::execute_promise_sync(
-                  wv,
-                  move || Ok(serde_json::Value::Null),
-                  callback,
-                  error,
-                );
-              });
+	      dispatch_and_execute(&mut _webview, serde_json::Value::Null, callback, error);
             }
             JSONRpcResp { error: Some(e), .. } => {
-              _webview.dispatch(move |wv| {
-                tauri::execute_promise_sync(wv, move || Ok(e), callback, error);
-              });
+	      dispatch_and_execute(&mut _webview, e, callback, error);
             }
             _ => {
-              _webview.dispatch(move |wv| {
-                tauri::execute_promise_sync(
-                  wv,
-                  move || Ok(String::from("Unknown error")),
-                  callback,
-                  error,
-                );
-              });
+	      dispatch_and_execute(&mut _webview, String::from("Unknown error"), callback, error);
             }
           };
         }
@@ -141,36 +118,18 @@ fn server_thread<T: Read + Write>(
               result: Some(serde_json::Value::Bool(b)),
               ..
             } => {
-              _webview.dispatch(move |wv| {
-                tauri::execute_promise_sync(wv, move || Ok(b), callback, error);
-              });
+	      dispatch_and_execute(&mut _webview, b, callback, error);
             }
             JSONRpcResp {
-              result: Some(b), ..
+              result: Some(_), ..
             } => {
-              _webview.dispatch(move |wv| {
-                tauri::execute_promise_sync(
-                  wv,
-                  move || Ok(String::from("Unknown result")),
-                  callback,
-                  error,
-                );
-              });
+	      dispatch_and_execute(&mut _webview, String::from("Unknown result"), callback, error);
             }
             JSONRpcResp { error: Some(e), .. } => {
-              _webview.dispatch(move |wv| {
-                tauri::execute_promise_sync(wv, move || Ok(e), callback, error);
-              });
+	      dispatch_and_execute(&mut _webview, e, callback, error);
             }
             _ => {
-              _webview.dispatch(move |wv| {
-                tauri::execute_promise_sync(
-                  wv,
-                  move || Ok(String::from("Unknown error")),
-                  callback,
-                  error,
-                );
-              });
+	      dispatch_and_execute(&mut _webview, String::from("Unknown error"), callback, error);
             }
           };
         }
@@ -181,36 +140,18 @@ fn server_thread<T: Read + Write>(
               ..
             } => {
               // Todo verify v is of correct form
-              _webview.dispatch(move |wv| {
-                tauri::execute_promise_sync(wv, move || Ok(m), callback, error);
-              });
+	      dispatch_and_execute(&mut _webview, m, callback, error);
             }
             JSONRpcResp {
               result: Some(e), ..
             } => {
-              _webview.dispatch(move |wv| {
-                tauri::execute_promise_sync(
-                  wv,
-                  move || Ok(format!("Unexpected result: {}", e)),
-                  callback,
-                  error,
-                );
-              });
+	      dispatch_and_execute(&mut _webview, format!("Unexpected result: {}", e), callback, error);
             }
             JSONRpcResp { error: Some(e), .. } => {
-              _webview.dispatch(move |wv| {
-                tauri::execute_promise_sync(wv, move || Ok(e), callback, error);
-              });
+	      dispatch_and_execute(&mut _webview, e, callback, error);
             }
             _ => {
-              _webview.dispatch(move |wv| {
-                tauri::execute_promise_sync(
-                  wv,
-                  move || Ok(String::from("Unknown error")),
-                  callback,
-                  error,
-                );
-              });
+	      dispatch_and_execute(&mut _webview, String::from("Unknown error"), callback, error);
             }
           };
         }
@@ -222,19 +163,10 @@ fn server_thread<T: Read + Write>(
           match rxtx_server(&mut server, set_microphones(value)) {
             JSONRpcResp { error: None, .. } => {
               // Todo verify v is of correct form
-              _webview.dispatch(move |wv| {
-                tauri::execute_promise_sync(
-                  wv,
-                  move || Ok(serde_json::Value::Null),
-                  callback,
-                  error,
-                );
-              });
+	      dispatch_and_execute(&mut _webview, serde_json::Value::Null, callback, error);
             }
             JSONRpcResp { error: Some(e), .. } => {
-              _webview.dispatch(move |wv| {
-                tauri::execute_promise_sync(wv, move || Ok(e), callback, error);
-              });
+	      dispatch_and_execute(&mut _webview, e, callback, error);
             }
           };
         }
@@ -250,7 +182,7 @@ fn server_thread<T: Read + Write>(
 }
 // https://github.com/tauri-apps/tauri/issues/1308
 fn get_real_resource_dir() -> Option<PathBuf> {
-  let mut p = tauri::api::path::resource_dir()?;
+  let p = tauri::api::path::resource_dir()?;
   match env::var("APPDIR") {
     Ok(v) => {
       let mut root = PathBuf::from(v);
@@ -272,6 +204,10 @@ fn get_real_resource_dir() -> Option<PathBuf> {
 fn main() {
   env_logger::init();
   info!("Starting");
+
+  let exe_path = env::current_exe().expect("Get current_exe");
+  info!("Exe path: {:?}", exe_path.clone().into_os_string());
+  
   // app is either dev or bundled. When it is dev we have to find bins
   // ourselves. Otherwise we can hopefully rely on
   // tauri_api::command::command_path
@@ -308,6 +244,7 @@ fn main() {
 	.env("LD_LIBRARY_PATH", runtime_lib_path.into_os_string())
 	.arg(sock_path.clone().into_os_string())
 	.arg(icon_path.into_os_string())
+	.arg(exe_path.clone().into_os_string())
 	.stdin(Stdio::piped())
 	.stdout(Stdio::piped())
 	.stderr(Stdio::inherit())
