@@ -8,7 +8,7 @@ use std::{
   env,
   fs::*,
   io::*,
-  os::unix::net::UnixListener,
+  os::unix::net::UnixStream,
   path::PathBuf,
   process::{Command, Stdio},
   string::String,
@@ -290,32 +290,37 @@ fn main() {
   runtime_lib_path.push("runtime_libs");
   info!("Setting LD_LIBRARY_PATH to {:?}", runtime_lib_path.clone().into_os_string());
 
+  let mut icon_path = resource_dir.clone();
+  icon_path.push("icons");
+  icon_path.push("icon.icns");
+  info!("icon path: {:?}", icon_path.clone().into_os_string());
+
   let mut sock_path = tauri::api::path::runtime_dir().expect("get runtime dir");
   sock_path.push("magic-mic.socket");
 
   info!("Socket path: {:?}", sock_path.clone().into_os_string());
 
-  if metadata(sock_path.clone().into_os_string()).is_ok() {
-    remove_file(sock_path.clone().into_os_string())
-      .expect("Failed to remove socket path, maybe permissions?");
-  }
-  let listener =
-    UnixListener::bind(sock_path.clone().into_os_string()).expect("Couldn't bind to unix socket");
+  let stream = match UnixStream::connect(sock_path.clone().into_os_string()) {
+    Ok(s) => s,
+    Err(e) => {
+      info!("Starting new server; error was: {}", e);
+      Command::new(server_path)
+	.env("LD_LIBRARY_PATH", runtime_lib_path.into_os_string())
+	.arg(sock_path.clone().into_os_string())
+	.arg(icon_path.into_os_string())
+	.stdin(Stdio::piped())
+	.stdout(Stdio::piped())
+	.stderr(Stdio::inherit())
+	.spawn()
+	.expect("spawn server process");
 
-  Command::new(server_path)
-    .env("LD_LIBRARY_PATH", runtime_lib_path.into_os_string())
-    .arg(sock_path.clone().into_os_string())
-    .stdin(Stdio::piped())
-    .stdout(Stdio::piped())
-    .stderr(Stdio::inherit())
-    .spawn()
-    .expect("spawn server process");
-
-  let stream = listener
-    .incoming()
-    .next()
-    .expect("Couldn't listen on socket")
-    .expect("Child failed to connect to socket");
+      // TODO: We have a race condition here because we want the spawned process to
+      // start the socket server, so we don't know when its listening
+      thread::sleep(std::time::Duration::from_millis(500));
+      UnixStream::connect(sock_path.clone().into_os_string())
+	.expect("Failed to connect to socket; FIX THIS RACE CONDITON")
+    }
+  };
 
   let (to_server, from_main) = mpsc::channel();
   thread::spawn(|| server_thread(stream, from_main));

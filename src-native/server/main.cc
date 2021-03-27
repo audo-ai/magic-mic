@@ -20,6 +20,7 @@
 #include "nlohmann/json.hpp"
 #include "spdlog/spdlog.h"
 #include "spdlog/sinks/stdout_color_sinks.h"
+#include "tray.h"
 
 #include "virtual_mic.h"
 
@@ -127,22 +128,30 @@ void write_json(int fd, json j) {
   while (length != str.length()) {
     ssize_t s = write(fd, c_str + length, str.length() - length);
     if (s == -1) {
-      throw std::runtime_error(strerror(errno));
+      spdlog::get("server")->debug("Failed to write out response");
+      return;
     }
     length += s;
   }
+}
+
+void quit_tray_cb(struct tray_menu *menu) {
+  *(bool*)menu->context = true;
 }
 int main(int argc, char **argv) {
   auto logger = spdlog::stderr_color_mt("server");
   //spdlog::register_logger(logger);
 
-  if (argc != 2) {
-    logger->error("USAGE: {} SOCK_PATH", argv[0]);
+  if (argc != 3) {
+    logger->error("USAGE: {} SOCK_PATH ICON_PATH", argv[0]);
     return 1;
   }
 
-  int sock_fd = socket(AF_UNIX, SOCK_STREAM, 0);
-  if (!sock_fd) {
+  unlink(argv[1]);
+  
+  int sock_fd = -1;
+  int serv_fd = socket(AF_UNIX, SOCK_STREAM, 0);
+  if (!serv_fd) {
     logger->error("socket(AF_UNIX, SOCK_STREAM, 0): {}", strerror(errno));
     return 1;
   }
@@ -151,13 +160,30 @@ int main(int argc, char **argv) {
   addr.sun_family = AF_UNIX;
   strcpy(addr.sun_path, argv[1]);
 
-  if (-1 == connect(sock_fd, (sockaddr *)&addr, sizeof(addr))) {
-    logger->error("connect(...): {}", strerror(errno));
+  if (-1 == bind(serv_fd, (sockaddr *)&addr, sizeof(addr))) {
+    logger->error("bind(...): {}", strerror(errno));
     return 1;
   }
-  fcntl(sock_fd, F_SETFL, O_NONBLOCK);
+  if (-1 == listen(serv_fd, 0)) {
+    logger->error("listen(...): {}", strerror(errno));
+    return 1;
+  }
+  fcntl(serv_fd, F_SETFL, O_NONBLOCK);
 
   signal(SIGINT, handle_signal);
+
+  bool tray_exit_requested = false;
+  struct tray_menu menu[] = {{"Quit", 0, 0, quit_tray_cb, &tray_exit_requested},
+				   {nullptr, 0, 0, nullptr, nullptr}};
+  struct tray tray = {
+      .icon = argv[2],
+      .menu = (struct tray_menu*)&menu,
+  };
+  if (tray_init(&tray) < 0) {
+    logger->error("Unable to create systray item");
+    return 1;
+  }
+
   logger->info("Starting {} virtual mic", VIRTUAL_MIC_NAME);
   auto l = spdlog::stderr_color_mt("virtmic");
   l->set_level(spdlog::level::trace);
@@ -180,23 +206,67 @@ int main(int argc, char **argv) {
     sigset_t mask;
     int ret;
     FD_ZERO(&rfds);
-    FD_SET(sock_fd, &rfds);
-    tv.tv_sec = 1;
-    tv.tv_nsec = 0;
+    FD_SET(serv_fd, &rfds);
+    if (-1 != sock_fd) {
+      FD_SET(sock_fd, &rfds);
+    }
+    tv.tv_sec = 0;
+    // 10 mil nano seconds = 10 milis?
+    // 100mil would probably be fine, but it tray doesn't seem to work at 100millis
+    tv.tv_nsec = 10000000;
     sigemptyset(&mask);
     sigaddset(&mask, SIGINT);
     sigaddset(&mask, SIGTERM);
 
-    ret = pselect(sock_fd + 1, &rfds, nullptr, nullptr, &tv, &mask);
+    // serv_fd is necessarily created first so will be smaller
+    ret = pselect(1 + (sock_fd == -1 ? serv_fd : sock_fd), &rfds, nullptr, nullptr, &tv, &mask);
+    tray_loop(0);
+    if (tray_exit_requested) {
+      logger->info("tray quit called");
+      if (sock_fd == -1) {
+	logger->info("No current connections; exiting");
+	running = false;
+      } else {
+	logger->info("Cilent connected, not exiting yet");
+	tray_exit_requested = false;
+	menu[0].checked = 0;
+	tray_update(&tray);
+      }
+    }
+
     if (ret == -1) {
       logger->error("pselect(...): {}", strerror(errno));
       running = false;
     }
 
+    if (FD_ISSET(serv_fd, &rfds)) {
+      if (sock_fd != -1) {
+	logger->debug("Attempt to connect to socket while already associated");
+	if (-1 == (sock_fd = accept(serv_fd, nullptr, nullptr))) {
+	  logger->debug("Error accepting connection (even though we will imediately close): {}", strerror(errno));
+	} else {
+	  close(sock_fd);
+	}
+	sock_fd = -1;
+      } else {
+	logger->info("Accepting connection");
+	if (-1 == (sock_fd = accept(serv_fd, nullptr, nullptr))) {
+	  logger->error("Error accepting conection: {}", strerror(errno));
+	  running = false;
+	} else {
+	  fcntl(sock_fd, F_SETFL, O_NONBLOCK);
+	  menu[0].disabled = 1;
+	  tray_update(&tray);
+	}
+      }
+    }
+
     if (FD_ISSET(sock_fd, &rfds)) {
       char c;
       int r;
+      int total_read = 0;
       while (1 == (r = read(sock_fd, &c, 1))) {
+	total_read += r;
 	if (c == delim) {
 	  try {
 	    // ahhh c++, you never cease to disappoint. Appearantly declare j
@@ -215,7 +285,12 @@ int main(int argc, char **argv) {
           ss << c;
         }
       }
-      if (r == 0) { break; }
+      if (r == 0) {
+	logger->debug("Connection to socket closed");
+	sock_fd = -1;
+	menu[0].disabled = 0;
+	tray_update(&tray);
+      }
     }
   }
   mic.stop();

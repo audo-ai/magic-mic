@@ -36,6 +36,16 @@ if (NOT spdlog_POPULATED)
   add_subdirectory(${spdlog_SOURCE_DIR} ${spdlog_BINARY_DIR})
 endif()
 
+FetchContent_Declare(tray
+  GIT_REPOSITORY https://github.com/audo-ai/tray.git
+  GIT_TAG 9a3c98520973a39d8c7ad5609bad96f20405c058)
+
+if (NOT tray_POPULATED)
+  FetchContent_Populate(tray)
+
+  add_subdirectory(${tray_SOURCE_DIR} ${tray_BINARY_DIR})
+endif()
+
 # Needs to be after fetch contents so _deps exists
 add_subdirectory(${LIBDENOISER_DIR} "./_deps/libdenoiser-build")
 

@@ -8,14 +8,14 @@ set_property(CACHE VIRTMIC_ENGINE PROPERTY STRINGS "PIPESOURCE")
 # Build Server
 add_executable(server server/main.cc server/rpc.cc)
 set_property(TARGET server PROPERTY CXX_STANDARD 17)
-target_include_directories(server PRIVATE common/)
+target_include_directories(server PRIVATE common/ ${tray_INCLUDE_DIR})
 
 # TODO Not sure why I can't link it PRIVATE
 # Well, I can link with private but only if literally everything in this file is
 # also linked with private. I tried that and apparently that keeps pipesource
 # from being able to find <torch/script.h> (required from denoiser.h). I'm not
 # sure why linking settings mess up includes, but I should figure that out.
-target_link_libraries(server nlohmann_json::nlohmann_json spdlog::spdlog)
+target_link_libraries(server nlohmann_json::nlohmann_json spdlog::spdlog tray)
 
 # Configure specifc virtmic engine
 if(${VIRTMIC_ENGINE} STREQUAL "PIPESOURCE")
