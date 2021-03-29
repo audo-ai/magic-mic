@@ -287,7 +287,7 @@ int main(int argc, char **argv) {
       }
     }
 
-    if (FD_ISSET(sock_fd, &rfds)) {
+    if (sock_fd != -1 && FD_ISSET(sock_fd, &rfds)) {
       char c;
       int r;
       int total_read = 0;
