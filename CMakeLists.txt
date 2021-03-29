@@ -13,7 +13,7 @@ include(FetchContent)
 # we'll leave it as is. There are alternatives (again, as explained in its
 # readme), but this will do for now
 FetchContent_Declare(json
-  GIT_REPOSITORY https://github.com/nlohmann/json.git
+  GIT_REPOSITORY https://github.com/ArthurSonzogni/nlohmann_json_cmake_fetchcontent
   GIT_SHALLOW "ON"
   GIT_TAG v3.7.3)
 
@@ -27,6 +27,7 @@ endif()
 
 FetchContent_Declare(spdlog
   GIT_REPOSITORY https://github.com/gabime/spdlog.git
+  GIT_SHALLOW "ON"
   GIT_TAG v1.8.2)
 
 if (NOT spdlog_POPULATED)
