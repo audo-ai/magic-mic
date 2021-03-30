@@ -371,8 +371,14 @@ void PipeSourceVirtualMic::start_recording_stream() {
       ss << "pa_stream_new failed (rec): " << pa_strerror(pa_context_errno(ctx.get()));
       throw std::runtime_error(ss.str());
     }
-
-    int err = pa_stream_connect_record(rec_stream.get(), source, nullptr, (pa_stream_flags)0);
+    pa_buffer_attr attr = {
+      .maxlength = (uint32_t)-1,
+      .tlength = (uint32_t)-1,
+      .prebuf = (uint32_t)-1,
+      .minreq = (uint32_t)-1,
+      .fragsize = (uint32_t)buffer_length,
+    };
+    int err = pa_stream_connect_record(rec_stream.get(), source, &attr, (pa_stream_flags)PA_STREAM_ADJUST_LATENCY);
     if (err != 0) {
       stringstream ss;
       ss << "pa_stream_connect_record: " << pa_strerror(err);
