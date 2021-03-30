@@ -42,14 +42,9 @@ using json = nlohmann::json;
 static bool running = true;
 constexpr char delim = '\n';
 
-void handle_signal(int sig) {
+void handle_sigint(int sig) {
   spdlog::get("server")->info("Signal Received");
-  switch (sig) {
-  case SIGTERM:
-  case SIGINT:
-    running = false;
-    break;
-  }
+  running = false;
 }
 struct interrupted_error : public std::exception {};
 
@@ -176,7 +171,8 @@ int main(int argc, char **argv) {
   }
   fcntl(serv_fd, F_SETFL, O_NONBLOCK);
 
-  signal(SIGINT, handle_signal);
+  signal(SIGINT, handle_sigint);
+  signal(SIGHUP, SIG_IGN);
 
   bool tray_exit_requested = false;
   bool open_app_requested = false;
