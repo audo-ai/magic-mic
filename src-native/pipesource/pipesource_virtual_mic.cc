@@ -115,8 +115,14 @@ void PipeSourceVirtualMic::run() {
 		      max_denoiser_buffer/2);
         denoiser.drop_samples(denoiser.get_buffer_size() - max_denoiser_buffer/2);
       }
-      poll_recording_stream();
-      write_to_outputs();
+      check_mic_active();
+      if (pb_state != Loopback && virtmic_source_state != PA_SOURCE_RUNNING) {
+	denoiser.should_denoise = false;
+      } else {
+	denoiser.should_denoise = should_denoise;
+      }
+	poll_recording_stream();
+	write_to_outputs();
       break;
     }
     switch (cur_act.action) {
@@ -494,6 +500,28 @@ PipeSourceVirtualMic::~PipeSourceVirtualMic() {
     }
   }
 }
+void PipeSourceVirtualMic::check_mic_active() {
+  pa_usec_t cur = pa_rtclock_now();
+  if (cur - mic_active_last_check >= mic_active_interval) {
+    mic_active_last_check = cur;
+
+    if (mic_active_op) {
+      pa_operation_cancel(mic_active_op);
+      pa_operation_unref(mic_active_op);
+    }
+
+    mic_active_op = pa_context_get_source_info_by_name(ctx.get(), "virtmic", mic_active_source_info_cb, this);
+  }
+}
+void PipeSourceVirtualMic::mic_active_source_info_cb(pa_context *ctx, const pa_source_info *i, int eol, void *u) {
+  PipeSourceVirtualMic *m = (PipeSourceVirtualMic *)u;
+  if (i) {
+    if (i->state != m->virtmic_source_state) {
+      m->logger->trace("VirtMic state is {}", i->state);
+    }
+    m->virtmic_source_state = i->state;
+  }
+}
 void PipeSourceVirtualMic::stop() {
   //   lock_guard<mutex> lock(mainloop_mutex);
   should_run = false;
@@ -541,7 +569,7 @@ future<void> PipeSourceVirtualMic::setMicrophone(int ind) {
 }
 future<void> PipeSourceVirtualMic::setRemoveNoise(bool b) {
   lock_guard<mutex> lock(mainloop_mutex);
-  denoiser.should_denoise = b;
+  should_denoise = b;
 
   promise<void> p;
   p.set_value();
@@ -634,5 +662,25 @@ std::ostream &operator<<(std::ostream &out, const PipeSourceVirtualMic::State va
   }
 #undef PROCESS_VAL
 
+  return out << s;
+}
+std::ostream &operator<<(std::ostream &out, const pa_source_state_t state) {
+  const char *s;
+
+#define PROCESS_VAL(c)                                                      \
+  case (c):                                                                    \
+    s = #c;                                                                     \
+    break;
+
+  switch (state) {
+    PROCESS_VAL(PA_SOURCE_RUNNING);
+    PROCESS_VAL(PA_SOURCE_SUSPENDED);
+    PROCESS_VAL(PA_SOURCE_IDLE);
+    PROCESS_VAL(PA_SOURCE_INVALID_STATE);
+  default:
+    s = "Unknown";
+    break;
+  }
+#undef PROCESS_VAL
   return out << s;
 }

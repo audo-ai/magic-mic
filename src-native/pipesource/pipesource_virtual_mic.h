@@ -164,6 +164,14 @@ private:
   shared_ptr<pa_stream> pb_stream;
   promise<bool> pb_promise;
 
+  // For regularly checking whether the virtmic is active
+  pa_source_state_t virtmic_source_state = PA_SOURCE_INVALID_STATE;
+  pa_usec_t mic_active_last_check = 0;
+  pa_usec_t mic_active_interval = 10000;
+  pa_operation *mic_active_op = nullptr;
+
+  bool should_denoise = false;
+
   Denoiser denoiser;
 
   mutex mainloop_mutex;
@@ -179,11 +187,13 @@ private:
   void check_module_loaded();
   void load_pipesource_module();
   void write_to_outputs();
+  void check_mic_active();
   static void index_cb(pa_context *c, unsigned int idx, void *u);
 
   void set_microphone();
   void get_microphones();
   static void source_info_cb(pa_context *c, const pa_source_info *i, int eol, void *u);
+  static void mic_active_source_info_cb(pa_context *c, const pa_source_info *i, int eol, void *u);
   static void module_info_cb(pa_context *c, const pa_module_info *i, int eol, void *u);
   static void get_mics_cb();
 

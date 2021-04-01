@@ -176,8 +176,11 @@ int main(int argc, char **argv) {
 
   bool tray_exit_requested = false;
   bool open_app_requested = false;
-  struct tray_menu menu[] = {{"Quit", 0, 0, quit_tray_cb, &tray_exit_requested},
-			     {"Open", 0, 0, open_tray_cb, &open_app_requested},
+  // The warnings for casting string const to char* were annoying
+  char quit_text[] = "Quit";
+  char open_text[] = "Open";
+  struct tray_menu menu[] = {{quit_text, 0, 0, quit_tray_cb, &tray_exit_requested},
+			     {open_text, 0, 0, open_tray_cb, &open_app_requested},
 			     {nullptr, 0, 0, nullptr, nullptr}};
   struct tray tray = {
       .icon = icon_path,
