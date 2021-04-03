@@ -46,75 +46,6 @@ void handle_sigint(int sig) {
   spdlog::get("server")->info("Signal Received");
   running = false;
 }
-struct interrupted_error : public std::exception {};
-
-template <typename T>
-void wait_on_future(future<T> &f) {
-  while (running) {
-    if (std::future_status::ready == f.wait_for(std::chrono::milliseconds(100))) {
-      return;
-    }
-  }
-  throw interrupted_error();
-}
-json handle_request(ConcreteVirtualMic *mic, RPCRequest req) {
-  // TODO: DRY
-  switch (req.type) {
-  case GetStatus: {
-    future<bool> f = mic->getStatus();
-    f.wait();
-    return make_response(req.id, f.get());
-  }
-  case GetMicrophones: {
-    future<pair<int, vector<pair<int, string>>>> f = mic->getMicrophones();
-    try {
-      wait_on_future<pair<int, vector<pair<int, string>>>>(f);
-    } catch(interrupted_error &e) {
-      return make_error(-32000, "Server error", "Interrupted while waiting for response");
-    }
-    auto val = f.get();
-
-    json list = json::basic_json::array({});
-    for (auto &tuple : std::get<1>(val)) {
-      list.push_back({{"id", std::get<0>(tuple)}, {"name", std::get<1>(tuple)}});
-    }
-    json resp;
-    resp["list"] = list;
-    resp["cur"] = std::get<0>(val);
-
-    return make_response(req.id, resp);
-  }
-  case SetMicrophone: {
-    future<void> f = mic->setMicrophone(req.mic_id);
-    try {
-      wait_on_future<void>(f);
-    } catch(interrupted_error &e) {
-      return make_error(-32000, "Server error", "Interrupted while waiting for response");
-    }
-    return make_response(req.id, {});
-  }
-  case SetRemoveNoise: {
-    future<void> f = mic->setRemoveNoise(req.should_remove_noise);
-    try {
-      wait_on_future<void>(f);
-    } catch(interrupted_error &e) {
-      return make_error(-32000, "Server error", "Interrupted while waiting for response");
-    }
-    return make_response(req.id, {});
-  }
-  case SetLoopback: {
-    future<bool> f = mic->setLoopback(req.should_loopback);
-    try {
-      wait_on_future<bool>(f);
-    } catch(interrupted_error &e) {
-      return make_error(-32000, "Server error", "Interrupted while waiting for response");
-    }
-    return make_response(req.id, f.get());
-  }
-  default:
-    throw std::runtime_error("Unknown request enountered in handle_request");
-  }
-}
 void write_json(int fd, json j) {
   string str = j.dump();
   str.push_back('\n');
@@ -138,7 +69,7 @@ void open_tray_cb(struct tray_menu *menu) {
 }
 int main(int argc, char **argv) {
   auto logger = spdlog::stderr_color_mt("server");
-  //spdlog::register_logger(logger);
+  spdlog::set_level(spdlog::level::trace);
 
   if (argc != 4) {
     logger->error("USAGE: {} SOCK_PATH ICON_PATH APP_PATH", argv[0]);
@@ -196,6 +127,8 @@ int main(int argc, char **argv) {
   l->set_level(spdlog::level::trace);
   ConcreteVirtualMic mic(l);
   auto err_fut = mic.get_exception_future();
+
+  RPCServer server(&mic);
 
   stringstream ss;
   while (running) {
@@ -298,10 +231,9 @@ int main(int argc, char **argv) {
 	    // outside of the try leads to horrible random jumps. Why?
 	    json j;
 	    ss >> j;
-	    RPCRequest req = parse_request(j);
-	    write_json(sock_fd, handle_request(&mic,req));
+	    server.handle_request(j);
 	  } catch (nlohmann::detail::parse_error &ex) {
-	    write_json(sock_fd, make_error(-32700, "Parse error"));
+	    write_json(sock_fd, server.make_error(-32700, "Parse error"));
 	  } catch (json err) {
 	    write_json(sock_fd, err);
 	  }
@@ -317,9 +249,19 @@ int main(int argc, char **argv) {
 	menu[1].disabled = 0;
 	menu[1].checked = 0;
 	tray_update(&tray);
+
+	server.clear();
+      }
+    }
+    if (sock_fd != -1) {
+      server.pump();
+      vector<json> to_write = server.pop_responses();
+      for (auto j : to_write) {
+	write_json(sock_fd, j);
       }
     }
   }
   mic.stop();
   return 0;
 }
+
