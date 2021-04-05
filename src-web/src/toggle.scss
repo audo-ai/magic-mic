@@ -1,4 +1,4 @@
- /* The switch - the box around the slider */
+/* The switch - the box around the slider */
 .switch {
   position: relative;
   display: inline-block;
@@ -22,7 +22,7 @@
   right: 0;
   bottom: 0;
   background-color: lighten(#f05742, 25%);
-  transition: .4s;
+  transition: 0.4s;
   height: 15px;
   width: 50px;
 }
@@ -35,7 +35,7 @@
   left: 0px;
   top: -6px;
   background-color: #f05742;
-  transition: .4s;
+  transition: 0.4s;
 }
 
 input:checked + .slider {
@@ -58,4 +58,4 @@ input:checked + .slider:before {
 
 .slider.round:before {
   border-radius: 50%;
-} 
+}

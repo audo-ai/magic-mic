@@ -24,7 +24,7 @@
 
 #include <string>
 
-#include "module_class.h"
+#include "module_class.hpp"
 
 extern "C" {
 #include <pulse/def.h>
@@ -44,54 +44,52 @@ extern "C" {
 #include <pulsecore/sink.h>
 #include <pulsecore/thread.h>
 
+PA_MODULE_AUTHOR("Audo AI");
+PA_MODULE_DESCRIPTION("Magic Mic");
+PA_MODULE_VERSION(PACKAGE_VERSION); // oh shit
+PA_MODULE_LOAD_ONCE(false);
+PA_MODULE_USAGE(_("source_name=<name for the source> "
+                  "source_properties=<properties for the source> "
+                  "master=<name of source to filter> "
+                  "uplink_sink=<name> (optional)"
+                  "format=<sample format> "
+                  "rate=<sample rate> "
+                  "channels=<number of channels> "
+                  "channel_map=<channel map> "
+                  "use_volume_sharing=<yes or no> "
+                  "force_flat_volume=<yes or no> "));
 
-  PA_MODULE_AUTHOR("Audo AI");
-  PA_MODULE_DESCRIPTION("Magic Mic");
-  PA_MODULE_VERSION(PACKAGE_VERSION);// oh shit
-  PA_MODULE_LOAD_ONCE(false);
-  PA_MODULE_USAGE(_("source_name=<name for the source> "
-		    "source_properties=<properties for the source> "
-		    "master=<name of source to filter> "
-		    "uplink_sink=<name> (optional)"
-		    "format=<sample format> "
-		    "rate=<sample rate> "
-		    "channels=<number of channels> "
-		    "channel_map=<channel map> "
-		    "use_volume_sharing=<yes or no> "
-		    "force_flat_volume=<yes or no> "));
-
-  int pa__init(pa_module *m) {
-    try {
-      void *module_data = pa_xnew0(Module, 1);
-      Module *u = new (module_data) Module(m);
-    } catch (const std::string &e) {
-      pa_log(e.c_str());
-      //pa__done(m);
-      return -1;
-    }
-    return 0;
+int pa__init(pa_module *m) {
+  try {
+    void *module_data = pa_xnew0(Module, 1);
+    Module *u = new (module_data) Module(m);
+  } catch (const std::string &e) {
+    pa_log(e.c_str());
+    // pa__done(m);
+    return -1;
   }
+  return 0;
+}
 
-  int pa__get_n_used(pa_module *m) {
-    Module *u;
+int pa__get_n_used(pa_module *m) {
+  Module *u;
 
-    pa_assert(m);
-    pa_assert_se(u = (Module*)m->userdata);
+  pa_assert(m);
+  pa_assert_se(u = (Module *)m->userdata);
 
-    return pa_source_linked_by(u->source);
-  }
+  return pa_source_linked_by(u->source);
+}
 
-  void pa__done(pa_module *m) {
-    Module *u;
+void pa__done(pa_module *m) {
+  Module *u;
 
-    pa_assert(m);
+  pa_assert(m);
 
-    if (!(u = (Module*)m->userdata))
-      return;
+  if (!(u = (Module *)m->userdata))
+    return;
 
-    u->~Module();
-  
-    pa_xfree(u);
-  }
+  u->~Module();
 
+  pa_xfree(u);
+}
 }

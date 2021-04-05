@@ -6,7 +6,7 @@ set(VIRTMIC_ENGINE CACHE STRING "which virtual mic engine should be built")
 set_property(CACHE VIRTMIC_ENGINE PROPERTY STRINGS "PIPESOURCE")
 
 # Build Server
-add_executable(server server/main.cc server/rpc.cc)
+add_executable(server server/main.cpp server/rpc.cpp)
 set_property(TARGET server PROPERTY CXX_STANDARD 17)
 target_include_directories(server PRIVATE common/ ${tray_INCLUDE_DIR})
 
@@ -19,7 +19,7 @@ target_link_libraries(server nlohmann_json::nlohmann_json spdlog::spdlog tray)
 
 # Configure specifc virtmic engine
 if(${VIRTMIC_ENGINE} STREQUAL "PIPESOURCE")
-  add_library(pipesource SHARED pipesource/pipesource_virtual_mic.cc)
+  add_library(pipesource SHARED pipesource/pipesource_virtual_mic.cpp)
 
   target_include_directories(pipesource PRIVATE common/)
   find_package(PulseAudio REQUIRED)
@@ -48,8 +48,8 @@ if (${BUILD_MODULE})
   message(WARNING "Module not yet integrated with anything")
   
   add_library(module-magic-mic MODULE
-    module/module-magic-mic.cc
-    module/module_class.cc)
+    module/module-magic-mic.cpp
+    module/module_class.cpp)
   set_target_properties(module-magic-mic PROPERTIES PREFIX "")
 
   find_package(PulseAudio REQUIRED)

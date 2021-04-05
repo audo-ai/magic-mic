@@ -1,7 +1,7 @@
-#include "rpc.h"
+#include "rpc.hpp"
 
 json RPCServer::make_error(int code, string message, optional<json> data,
-			   optional<string> id) {
+                           optional<string> id) {
   json out;
   out["jsonrpc"] = "2.0";
   out["error"] = {{"code", code}, {"message", message}};
@@ -37,7 +37,7 @@ RPCServer::Request RPCServer::parse_request(json j) {
   Request req;
   if (!j["id"].is_string()) {
     throw make_error(-32603, "Internal Error",
-		     json("We do not support non string id"));
+                     json("We do not support non string id"));
   }
   req.id = j["id"].get<std::string>();
   std::string method = j["method"].get<std::string>();
@@ -48,21 +48,21 @@ RPCServer::Request RPCServer::parse_request(json j) {
   } else if (method == "setMicrophone") {
     if (!j["params"].is_number()) {
       throw make_error(-32602, "Invalid Params",
-		       "param must be number for setMicrophone", req.id);
+                       "param must be number for setMicrophone", req.id);
     }
     req.type = RequestTypes::SetMicrophone;
     req.micId = j["params"].get<int>();
   } else if (method == "setRemoveNoise") {
     if (!j["params"].is_boolean()) {
       throw make_error(-32602, "Invalid Params",
-		       "param must be bool for setRemoveNoise", req.id);
+                       "param must be bool for setRemoveNoise", req.id);
     }
     req.type = RequestTypes::SetRemoveNoise;
     req.shouldRemoveNoise = j["params"].get<bool>();
   } else if (method == "setLoopback") {
     if (!j["params"].is_boolean()) {
       throw make_error(-32602, "Invalid Params",
-		       "param must be bool for setLoopback", req.id);
+                       "param must be bool for setLoopback", req.id);
     }
     req.type = RequestTypes::SetLoopback;
     req.shouldLoopback = j["params"].get<bool>();
@@ -88,29 +88,29 @@ void RPCServer::pump() {
     switch (req.type) {
     case RequestTypes::GetStatus: {
       current_response = {
-	  .type = req.type, .id = req.id, .fut = mic->getStatus()};
+          .type = req.type, .id = req.id, .fut = mic->getStatus()};
       break;
     }
     case RequestTypes::GetMicrophones: {
       current_response = {
-	  .type = req.type, .id = req.id, .fut = mic->getMicrophones()};
+          .type = req.type, .id = req.id, .fut = mic->getMicrophones()};
       break;
     }
     case RequestTypes::SetMicrophone: {
       current_response = {
-	  .type = req.type, .id = req.id, .fut = mic->setMicrophone(req.micId)};
+          .type = req.type, .id = req.id, .fut = mic->setMicrophone(req.micId)};
       break;
     }
     case RequestTypes::SetRemoveNoise: {
       current_response = {.type = req.type,
-			  .id = req.id,
-			  .fut = mic->setRemoveNoise(req.shouldRemoveNoise)};
+                          .id = req.id,
+                          .fut = mic->setRemoveNoise(req.shouldRemoveNoise)};
       break;
     }
     case RequestTypes::SetLoopback: {
       current_response = {.type = req.type,
-			  .id = req.id,
-			  .fut = mic->setLoopback(req.shouldLoopback)};
+                          .id = req.id,
+                          .fut = mic->setLoopback(req.shouldLoopback)};
       break;
     }
     }
@@ -142,7 +142,7 @@ vector<json> RPCServer::pop_responses() {
     json list = json::basic_json::array({});
     for (auto &tuple : std::get<1>(val)) {
       list.push_back(
-	  {{"id", std::get<0>(tuple)}, {"name", std::get<1>(tuple)}});
+          {{"id", std::get<0>(tuple)}, {"name", std::get<1>(tuple)}});
     }
     json j;
     j["list"] = list;

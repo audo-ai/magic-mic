@@ -4,11 +4,11 @@
 #include <config.h>
 #endif
 
-#include <new>
-#include <memory>
 #include <functional>
-#include <type_traits>
+#include <memory>
+#include <new>
 #include <string>
+#include <type_traits>
 
 // pulseaudio wasn't expecting a module to be written in c++, huh?
 extern "C" {
@@ -65,13 +65,15 @@ private:
   unsigned channels;
 
   pa_source *master = nullptr;
-  pa_sample_spec ss = {.format = PA_SAMPLE_FLOAT32LE, .rate = 16384, .channels = 1};
+  pa_sample_spec ss = {
+      .format = PA_SAMPLE_FLOAT32LE, .rate = 16384, .channels = 1};
   pa_channel_map map;
   std::shared_ptr<pa_thread> thread;
   bool use_volume_sharing = true, force_flat_volume = false;
   char source_name[64] = "Magic Mic";
   pa_atomic_t run_thread;
-  size_t max_q_len = 1048576, prebuf = 0, maxrewind = 1048576; // TODO consider this
+  size_t max_q_len = 1048576, prebuf = 0,
+         maxrewind = 1048576; // TODO consider this
   std::shared_ptr<pa_memblockq> memblockq_in, memblockq_out;
   std::shared_ptr<pa_rtpoll> rtpoll;
 
@@ -80,7 +82,6 @@ private:
   void store_modargs(std::shared_ptr<pa_modargs> ma);
   void create_source(std::shared_ptr<pa_modargs> ma);
   void create_source_output();
-
 
   // Callback functions:
   // =================================================================

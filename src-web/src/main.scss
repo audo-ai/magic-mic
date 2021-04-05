@@ -1,69 +1,71 @@
 @font-face {
-    font-family: "AFontMedium";
-    src: url("fonts/Roboto-Medium.ttf");
+  font-family: "AFontMedium";
+  src: url("fonts/Roboto-Medium.ttf");
 }
 @font-face {
-    font-family: "AFontBold";
-    src: url("fonts/Roboto-Bold.ttf");
+  font-family: "AFontBold";
+  src: url("fonts/Roboto-Bold.ttf");
 }
 @font-face {
-    font-family: "AFontRegular";
-    src: url("fonts/Roboto-Regular.ttf");
+  font-family: "AFontRegular";
+  src: url("fonts/Roboto-Regular.ttf");
 }
-html, body, #root {
-    height: 100%;
-    margin: 0px;
-    overflow: hidden;
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0px;
+  overflow: hidden;
 }
 body {
-    background: #121212;
-    color: white;
-    font-family: "AFontRegular";
+  background: #121212;
+  color: white;
+  font-family: "AFontRegular";
 }
 #main-container {
-    max-width: 400px;
-    max-height: 450px;
-    height: 100%;
+  max-width: 400px;
+  max-height: 450px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
+  margin: auto;
+  #logo {
+    padding-top: 30px;
+    width: 20%;
+  }
+  #bottom {
+    font-family: "AFontMedium";
+    font-size: 20px;
+    color: #f05742;
+    padding-bottom: 20px;
+    margin: 0px;
     display: flex;
-    flex-direction: column;
-    justify-content: space-between;
     align-items: center;
-    margin: auto;
-    #logo {
-	padding-top: 30px;
-	width: 20%;
+    flex-direction: column;
+    * {
+      margin: auto;
+      margin-bottom: 10px;
+      width: max-content;
     }
-    #bottom {
-	font-family: "AFontMedium";
-	font-size: 20px;
-	color: #f05742;
-	padding-bottom: 20px;
-	margin: 0px;
-	display: flex;
-	align-items: center;
-	flex-direction: column;
-	* {
-	    margin: auto;
-	    margin-bottom: 10px;
-	    width: max-content;
-	}
-	#loopback {
-	    cursor: pointer;
-	}
-	#feedback {
-	    color: #aaa;
-	    cursor: pointer;
-	    text-decoration: underline;
-	    font-size: .8em;
-	}
+    #loopback {
+      cursor: pointer;
     }
+    #feedback {
+      color: #aaa;
+      cursor: pointer;
+      text-decoration: underline;
+      font-size: 0.8em;
+    }
+  }
 }
 
 #error-container {
-    width: 100%;
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
 }

@@ -1,4 +1,4 @@
-#include "module_class.h"
+#include "module_class.hpp"
 
 void Module::thread_func(void *userdata) {
   Module *u = (Module *)userdata;
@@ -7,25 +7,28 @@ void Module::thread_func(void *userdata) {
   while (pa_atomic_load(&u->run_thread)) {
     pa_memchunk chunk;
     // if (pa_memblockq_get_length(u->memblockq_in.get())) {
-    //   pa_log_info("in length: %d", pa_memblockq_get_length(u->memblockq_in.get()));
+    //   pa_log_info("in length: %d",
+    //   pa_memblockq_get_length(u->memblockq_in.get()));
     // }
     while (0 == pa_memblockq_peek(u->memblockq_in.get(), &chunk)) {
-      // Might have a problem if this becomes zero. Not 
-      auto len_to_take = u->denoiser.get_size_multiple()*(chunk.length/u->denoiser.get_size_multiple());
+      // Might have a problem if this becomes zero. Not
+      auto len_to_take = u->denoiser.get_size_multiple() *
+                         (chunk.length / u->denoiser.get_size_multiple());
       if (chunk.memblock) {
-	pa_memblock_acquire(chunk.memblock);
-	u->denoiser.feed((float *)chunk.memblock, len_to_take);
-	pa_memblock_release(chunk.memblock);
-	//pa_memblockq_push(u->memblockq_out.get(), &chunk);
+        pa_memblock_acquire(chunk.memblock);
+        u->denoiser.feed((float *)chunk.memblock, len_to_take);
+        pa_memblock_release(chunk.memblock);
+        // pa_memblockq_push(u->memblockq_out.get(), &chunk);
       }
       pa_memblockq_drop(u->memblockq_in.get(), len_to_take);
-      if (chunk.memblock) 
-	pa_memblock_unref(chunk.memblock);
+      if (chunk.memblock)
+        pa_memblock_unref(chunk.memblock);
     }
     std::size_t size;
     if (0 != (size = u->denoiser.willspew())) {
       pa_memchunk chunk;
-      pa_memblock *block = pa_memblock_new(u->module->core->mempool, size*sizeof(float));
+      pa_memblock *block =
+          pa_memblock_new(u->module->core->mempool, size * sizeof(float));
       // TODO this might fail, and if so its not actually a problem, we just
       // need to split up allocation to smaller blocks
       assert(block);
@@ -145,19 +148,19 @@ void Module::source_output_push_cb(pa_source_output *o,
 
   /* PUT YOUR CODE HERE TO DO SOMETHING WITH THE SOURCE DATA */
   /* forward the data to the virtual source */
-  //pa_log("Chunk length: %zu", chunk->length);
-  //pa_source_post(u->source, chunk);
+  // pa_log("Chunk length: %zu", chunk->length);
+  // pa_source_post(u->source, chunk);
   pa_memblock_acquire_chunk(chunk);
   pa_memblockq_push(u->memblockq_in.get(), chunk);
   pa_memblock_release(chunk->memblock);
   pa_memchunk qchunk;
-  //pa_log_info("qchunk: %p", qchunk.memblock);
-  int posted =0;
+  // pa_log_info("qchunk: %p", qchunk.memblock);
+  int posted = 0;
   while (pa_memblockq_peek(u->memblockq_out.get(), &qchunk) == 0) {
     posted += qchunk.length;
     // sometimes peek returns just length, for a hole I believe
     if (qchunk.memblock)
-	pa_source_post(u->source, &qchunk);
+      pa_source_post(u->source, &qchunk);
     pa_memblockq_drop(u->memblockq_out.get(), qchunk.length);
     if (qchunk.memblock)
       pa_memblock_unref(qchunk.memblock);
@@ -384,7 +387,8 @@ void Module::create_source(std::shared_ptr<pa_modargs> ma) {
 
   source->userdata = this;
 
-  // highly unser about this. ostensible purpose is to stop loopback from crashing on unload
+  // highly unser about this. ostensible purpose is to stop loopback from
+  // crashing on unload
   source->thread_info.rtpoll = master->thread_info.rtpoll;
 
   source->parent.process_msg = Module::source_process_msg_cb;
@@ -438,7 +442,6 @@ void Module::create_source_output() {
 
   // This is what makes it a filter source
   source->output_from_master = source_output;
-
 }
 Module::Module(pa_module *m) : denoiser() {
   pa_log_debug("loading magic");
@@ -463,14 +466,20 @@ Module::Module(pa_module *m) : denoiser() {
 
   char q_in_name[sizeof(source_name) + 64];
   std::sprintf(q_in_name, "memblockq in: %s", source_name);
-  memblockq_in = std::shared_ptr<pa_memblockq>(pa_memblockq_new(q_in_name, 0, max_q_len, 0, &ss, prebuf, 0, maxrewind, nullptr), pa_memblockq_free);
+  memblockq_in = std::shared_ptr<pa_memblockq>(
+      pa_memblockq_new(q_in_name, 0, max_q_len, 0, &ss, prebuf, 0, maxrewind,
+                       nullptr),
+      pa_memblockq_free);
   if (!memblockq_in) {
     throw "Failed to create source memblockq_in";
   }
   char q_out_name[sizeof(source_name) + 64];
-  //pa_memblock_ref(source_output->source->silence.memblock);
+  // pa_memblock_ref(source_output->source->silence.memblock);
   std::sprintf(q_in_name, "memblockq out: %s", source_name);
-  memblockq_out = std::shared_ptr<pa_memblockq>(pa_memblockq_new(q_out_name, 0, max_q_len, 0, &ss, prebuf, 0, maxrewind, nullptr), pa_memblockq_free);
+  memblockq_out = std::shared_ptr<pa_memblockq>(
+      pa_memblockq_new(q_out_name, 0, max_q_len, 0, &ss, prebuf, 0, maxrewind,
+                       nullptr),
+      pa_memblockq_free);
   if (!memblockq_out) {
     throw "Failed to create source memblockq_out";
   }
@@ -478,7 +487,6 @@ Module::Module(pa_module *m) : denoiser() {
   if (!rtpoll) {
     throw "Failed to create rtpoll (?!)";
   }
-
 
   /* The order here is important. The output must be put first,
    * otherwise streams might attach to the source before the
@@ -491,14 +499,13 @@ Module::Module(pa_module *m) : denoiser() {
   thread = std::shared_ptr<pa_thread>(
       pa_thread_new("magic mic thread", Module::thread_func, this),
       [this](pa_thread *thread) {
-	pa_log("stopping thread");
-	pa_atomic_store(&run_thread, 0);
-	pa_thread_free(thread);
+        pa_log("stopping thread");
+        pa_atomic_store(&run_thread, 0);
+        pa_thread_free(thread);
       });
   if (!thread) {
     throw "Failed to initialize thread";
   }
-
 }
 Module::~Module() {
   pa_log_debug("unloading magic");

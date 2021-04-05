@@ -7,6 +7,7 @@ set(LIBDENOISER_DIR "" CACHE PATH "path to libdenoiser project")
 
 # Dependencies
 include(FetchContent)
+include(cmake/formatting.cmake)
 
 # json
 # as explained, in its readme, this repo is unecessarily large, but, for now
@@ -51,6 +52,12 @@ endif()
 add_subdirectory(${LIBDENOISER_DIR} "./_deps/libdenoiser-build")
 
 add_subdirectory(src-native)
+
+file(GLOB_RECURSE ALL_CODE_FILES
+  ${PROJECT_SOURCE_DIR}/src-native/**/*.[ch]pp
+  )
+message(WARN ${ALL_CODE_FILES})
+clang_format(TARGET_NAME ${ALL_CODE_FILES})
 
 if (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
   #TOOD MAke depend on server

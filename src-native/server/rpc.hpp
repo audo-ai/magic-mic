@@ -8,7 +8,7 @@
 
 #include "nlohmann/json.hpp"
 
-#include "virtual_mic.h"
+#include "virtual_mic.hpp"
 
 using json = nlohmann::json;
 using std::future;
@@ -29,8 +29,8 @@ public:
   void clear();
 
   static json make_error(int code, string message,
-			 optional<json> data = std::nullopt,
-			 optional<string> id = std::nullopt);
+                         optional<json> data = std::nullopt,
+                         optional<string> id = std::nullopt);
   static json make_response(string id, json result);
 
 private:
@@ -47,16 +47,16 @@ private:
     string id;
     union {
       struct {
-	// SetMicrophone
-	int micId;
+        // SetMicrophone
+        int micId;
       };
       struct {
-	// SetRemoveNoise
-	bool shouldRemoveNoise;
+        // SetRemoveNoise
+        bool shouldRemoveNoise;
       };
       struct {
-	// SetLoopback
-	bool shouldLoopback;
+        // SetLoopback
+        bool shouldLoopback;
       };
     };
   };
@@ -65,8 +65,8 @@ private:
     enum RequestTypes type;
     string id;
     variant<future<bool>, future<pair<int, vector<pair<int, string>>>>,
-	    future<void>>
-	fut;
+            future<void>>
+        fut;
   };
   VirtualMic *mic;
   vector<Request> request_queue;

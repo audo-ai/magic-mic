@@ -6,17 +6,17 @@
 #include <iostream>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <thread>
-#include <optional>
 
-#include <spdlog/spdlog.h>
 #include <spdlog/sinks/null_sink.h>
+#include <spdlog/spdlog.h>
 
 #include <pulse/pulseaudio.h>
 
 #include <denoiser.h>
-#include <virtual_mic.h>
+#include <virtual_mic.hpp>
 
 using std::atomic;
 using std::future;
@@ -49,9 +49,10 @@ public:
   future<std::exception_ptr> get_exception_future() override {
     return exception_promise.get_future();
   };
+
 private:
   std::shared_ptr<spdlog::logger> logger;
-  
+
   promise<std::exception_ptr> exception_promise;
   thread async_thread;
   struct GetMicrophones {
@@ -62,7 +63,11 @@ private:
     promise<pair<int, vector<pair<int, string>>>> p;
   };
   struct SetMicrophone {
-    enum SetMicrophoneActionState { InitGettingSource, WaitGettingSource, UpdatingStream };
+    enum SetMicrophoneActionState {
+      InitGettingSource,
+      WaitGettingSource,
+      UpdatingStream
+    };
     enum SetMicrophoneActionState state;
     pa_operation *op;
     int ind;
@@ -73,8 +78,8 @@ private:
     enum { NoAction, GetMicrophones, SetMicrophone, Loopback } action;
     // I'm a little worried about the memory management here
     // union {
-      struct GetMicrophones get_mics;
-      struct SetMicrophone set_mic;
+    struct GetMicrophones get_mics;
+    struct SetMicrophone set_mic;
     // };
     CurrentAction() { this->action = NoAction; }
     // ~CurrentAction() {
@@ -101,7 +106,8 @@ private:
     WaitRecStreamReady,
     Denoise
   };
-  friend std::ostream &operator<<(std::ostream &out, const PipeSourceVirtualMic::State value);
+  friend std::ostream &operator<<(std::ostream &out,
+                                  const PipeSourceVirtualMic::State value);
   CurrentAction cur_act;
   State state;
   void changeState(State s);
@@ -192,9 +198,12 @@ private:
 
   void set_microphone();
   void get_microphones();
-  static void source_info_cb(pa_context *c, const pa_source_info *i, int eol, void *u);
-  static void mic_active_source_info_cb(pa_context *c, const pa_source_info *i, int eol, void *u);
-  static void module_info_cb(pa_context *c, const pa_module_info *i, int eol, void *u);
+  static void source_info_cb(pa_context *c, const pa_source_info *i, int eol,
+                             void *u);
+  static void mic_active_source_info_cb(pa_context *c, const pa_source_info *i,
+                                        int eol, void *u);
+  static void module_info_cb(pa_context *c, const pa_module_info *i, int eol,
+                             void *u);
   static void get_mics_cb();
 
   // utils

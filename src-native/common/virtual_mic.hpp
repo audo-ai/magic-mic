@@ -1,9 +1,9 @@
 #pragma once
 
-#include <string>
-#include <vector>
-#include <utility>
 #include <future>
+#include <string>
+#include <utility>
+#include <vector>
 
 using std::future;
 using std::pair;
