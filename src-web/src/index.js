@@ -14,14 +14,27 @@ import logo from './img/logo.png';
 import mic from './img/mic.svg';
 import speaker from './img/speaker.svg';
 
+const makeExternalCmd = (p) => {
+    return {
+	cmd: "externalCommand",
+	payload: p
+    };
+};
+const makeLocalCmd = (p) => {
+    return {
+	cmd: "localCommand",
+	payload: p
+    };
+};
 const DEBUG = 0;
 const ERROR = 1;
 const INFO = 2;
 const TRACE = 3;
 const WARN = 4;
 const log = (msg, level) => {
-    invoke({cmd: "log", msg, level});
+    invoke(makeLocalCmd({cmd: "log", msg, level}));
 }
+
 const SelectWithImage = ({options, image, chosen, setChosen}) => {
     return <div className="select-with-image">
 	       <img src={image} />
@@ -51,7 +64,7 @@ const DeviceSelector = ({title, current, icon, devices, switchToDevice}) => {
 	setDevice(cur);
     }, [current]);
     useEffect(() => {
-	promisified({cmd: "setShouldRemoveNoise", value: remove})
+	promisified(makeExternalCmd({cmd: "setShouldRemoveNoise", value: remove}))
 	    .then((v) => log(`setShouldRemoveNoise response: "${JSON.stringify(v)}"`, TRACE))
 	    .catch((v) => log(`setShouldRemoveNoise error: "${JSON.stringify(v)}"`, ERROR));
     }, [remove]);
@@ -84,7 +97,7 @@ const App = () => {
     useEffect(() => {
 	// This clear interval stuff is definetly broken. Need to fix it
 	const cb = () => {
-	    promisified({cmd: "getStatus"})
+	    promisified(makeExternalCmd({cmd: "getStatus"}))
 		.then((v) => {
 		    if (v === true) {
 			setStatus("Good");
@@ -114,7 +127,7 @@ const App = () => {
 	cb()
     }, [status]);
     useEffect(() => {
-	promisified({cmd: "getMicrophones"})
+	promisified(makeExternalCmd({cmd: "getMicrophones"}))
 	    .then((v) => {
 		setDevices(v["list"]);
 		setCurrentDevice(v["cur"]);
@@ -126,7 +139,7 @@ const App = () => {
     useEffect(() => {
 	// TODO: Handle errors
 	if (devices.length > 0) {
-	promisified({cmd: "setLoopback", value: loopback})
+	    promisified(makeExternalCmd({cmd: "setLoopback", value: loopback}))
 		.then((v) =>
 		    log(`setLoopback response: "${JSON.stringify(v)}"`, TRACE))
 		.catch((v) =>
@@ -138,7 +151,7 @@ const App = () => {
     case "Good":
 	return <div id="main-container">
 		   <img id="logo" src={logo} />
-		   <DeviceSelector title="Microphone" current={curDevice} icon={mic} devices={devices} switchToDevice={(v) => promisified({cmd: "setMicrophone", value: v})}/>
+		   <DeviceSelector title="Microphone" current={curDevice} icon={mic} devices={devices} switchToDevice={(v) => promisified(makeExternalCmd({cmd: "setMicrophone", value: v}))}/>
 		   {/*<DeviceSelector title="Speakers" icon={speaker} devices={[{name:"Speakers - System Default", id:0}]} /> */}
 		   <div id="bottom">
 		   <p id="loopback" onClick={() => setLoopback(!loopback)}> {loopback ? "Stop" : "Mic Check"} </p>

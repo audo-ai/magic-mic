@@ -16,6 +16,7 @@ tauri = { version = "0.11", features = [ "all-api" ] }
 anyhow = { version = "1.0.38" }
 log = "0.4.0"
 env_logger = "0.8.3"
+rand = "0.8.3"
 
 [target."cfg(windows)".build-dependencies]
 winres = "0.1"

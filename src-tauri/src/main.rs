@@ -5,11 +5,9 @@
 
 use std::{
   env,
-  io::*,
   os::unix::net::UnixStream,
   path::PathBuf,
   process::{Command, Stdio},
-  string::String,
   sync::mpsc,
   thread,
 };
@@ -22,164 +20,6 @@ mod rpc;
 use cmd::*;
 use rpc::*;
 
-fn get_message<R: Read>(r: &mut R) -> JSONRpcResp {
-  let mut str = String::from("");
-  let mut arr = [0; 256];
-  loop {
-    // TODO handle this error
-    let res = r.read(&mut arr).expect("Read should succeed");
-    if res != 0 {}
-    for i in 0..res {
-      str.push(arr[i] as char);
-    }
-    if res != 0 && arr[res - 1] == 10 {
-      break;
-    }
-  }
-  serde_json::from_str(&str).unwrap()
-}
-fn rxtx_server<T: Read + Write>(server: &mut T, req: JSONRpcReq) -> JSONRpcResp {
-  let r = serde_json::to_string(&req).unwrap();
-  trace!(
-    "Server request: \"{}\"",
-    serde_json::to_string_pretty(&r).unwrap()
-  );
-  server
-    .write(&r.as_bytes())
-    .expect("Failed to write to server");
-  server.write(b"\n").expect("Failed to write to server");
-  let r = get_message(server);
-  trace!(
-    "Server response: \"{}\"",
-    serde_json::to_string_pretty(&r).unwrap()
-  );
-  return r;
-}
-fn dispatch_and_execute<R: serde::Serialize + Send + 'static>(_webview: &mut tauri::WebviewMut, mess: R, callback: String, error: String) {
-  _webview.dispatch(move |wv| {
-    tauri::execute_promise_sync(wv, move || Ok(mess), callback, error)
-      .expect("expecute_promise_sync should suceed");
-  }).expect("dispatch should succeed");
-}
-fn server_thread<T: Read + Write>(
-  mut server: T,
-  rx: mpsc::Receiver<(tauri::WebviewMut, Cmd)>,
-) -> () {
-  loop {
-    // TODO: This is horrible. DRY!
-    if let Ok((mut _webview, event)) = rx.recv() {
-      match event {
-        Cmd::GetStatus { callback, error } => {
-          match rxtx_server(&mut server, get_status()) {
-            JSONRpcResp {
-              result: Some(serde_json::Value::Bool(b)),
-              ..
-            } => {
-	      dispatch_and_execute(&mut _webview, b, callback, error);
-            }
-            JSONRpcResp { error: Some(e), .. } => {
-	      dispatch_and_execute(&mut _webview, e, callback, error);
-            }
-            _ => {
-	      dispatch_and_execute(&mut _webview, String::from("Unknown error"), callback, error);
-            }
-          };
-        }
-        Cmd::SetShouldRemoveNoise {
-          value,
-          callback,
-          error,
-        } => {
-          // let r = serde_json::to_string(&set_should_remove_noise(value)).unwrap();
-          // println!("Server request: {}", serde_json::to_string(&r).unwrap());
-          // server.write(&r.as_bytes());
-          // server.write(b"\n");
-          // let r = get_message(& mut server);
-          // println!("Server response: {}", serde_json::to_string(&r).unwrap());
-          match rxtx_server(&mut server, set_should_remove_noise(value)) {
-            JSONRpcResp { result: None, .. } => {
-	      dispatch_and_execute(&mut _webview, serde_json::Value::Null, callback, error);
-            }
-            JSONRpcResp { error: Some(e), .. } => {
-	      dispatch_and_execute(&mut _webview, e, callback, error);
-            }
-            _ => {
-	      dispatch_and_execute(&mut _webview, String::from("Unknown error"), callback, error);
-            }
-          };
-        }
-        Cmd::SetLoopback {
-          value,
-          callback,
-          error,
-        } => {
-          match rxtx_server(&mut server, set_loopback(value)) {
-            JSONRpcResp {
-              result: Some(serde_json::Value::Bool(b)),
-              ..
-            } => {
-	      dispatch_and_execute(&mut _webview, b, callback, error);
-            }
-            JSONRpcResp {
-              result: Some(_), ..
-            } => {
-	      dispatch_and_execute(&mut _webview, String::from("Unknown result"), callback, error);
-            }
-            JSONRpcResp { error: Some(e), .. } => {
-	      dispatch_and_execute(&mut _webview, e, callback, error);
-            }
-            _ => {
-	      dispatch_and_execute(&mut _webview, String::from("Unknown error"), callback, error);
-            }
-          };
-        }
-        Cmd::GetMicrophones { callback, error } => {
-          match rxtx_server(&mut server, get_microphones()) {
-            JSONRpcResp {
-              result: Some(serde_json::Value::Object(m)),
-              ..
-            } => {
-              // Todo verify v is of correct form
-	      dispatch_and_execute(&mut _webview, m, callback, error);
-            }
-            JSONRpcResp {
-              result: Some(e), ..
-            } => {
-	      dispatch_and_execute(&mut _webview, format!("Unexpected result: {}", e), callback, error);
-            }
-            JSONRpcResp { error: Some(e), .. } => {
-	      dispatch_and_execute(&mut _webview, e, callback, error);
-            }
-            _ => {
-	      dispatch_and_execute(&mut _webview, String::from("Unknown error"), callback, error);
-            }
-          };
-        }
-        Cmd::SetMicrophone {
-          value,
-          callback,
-          error,
-        } => {
-          match rxtx_server(&mut server, set_microphones(value)) {
-            JSONRpcResp { error: None, .. } => {
-              // Todo verify v is of correct form
-	      dispatch_and_execute(&mut _webview, serde_json::Value::Null, callback, error);
-            }
-            JSONRpcResp { error: Some(e), .. } => {
-	      dispatch_and_execute(&mut _webview, e, callback, error);
-            }
-          };
-        }
-        Cmd::Exit => {
-          break;
-        }
-        Cmd::Log { .. } => {
-          error!("RPC thread received Cmd::Log message!");
-        }
-      }
-    }
-  }
-}
 // https://github.com/tauri-apps/tauri/issues/1308
 fn get_real_resource_dir() -> Option<PathBuf> {
   let p = tauri::api::path::resource_dir()?;
@@ -207,7 +47,7 @@ fn main() {
 
   let exe_path = env::current_exe().expect("Get current_exe");
   info!("Exe path: {:?}", exe_path.clone().into_os_string());
-  
+
   // app is either dev or bundled. When it is dev we have to find bins
   // ourselves. Otherwise we can hopefully rely on
   // tauri_api::command::command_path
@@ -224,7 +64,10 @@ fn main() {
   let mut runtime_lib_path = resource_dir.clone();
   runtime_lib_path.push("native");
   runtime_lib_path.push("runtime_libs");
-  info!("Setting LD_LIBRARY_PATH to {:?}", runtime_lib_path.clone().into_os_string());
+  info!(
+    "Setting LD_LIBRARY_PATH to {:?}",
+    runtime_lib_path.clone().into_os_string()
+  );
 
   let mut icon_path = resource_dir.clone();
   icon_path.push("icons");
@@ -241,21 +84,21 @@ fn main() {
     Err(e) => {
       info!("Starting new server; error was: {}", e);
       Command::new(server_path)
-	.env("LD_LIBRARY_PATH", runtime_lib_path.into_os_string())
-	.arg(sock_path.clone().into_os_string())
-	.arg(icon_path.into_os_string())
-	.arg(exe_path.clone().into_os_string())
-	.stdin(Stdio::piped())
-	.stdout(Stdio::piped())
-	.stderr(Stdio::inherit())
-	.spawn()
-	.expect("spawn server process");
+        .env("LD_LIBRARY_PATH", runtime_lib_path.into_os_string())
+        .arg(sock_path.clone().into_os_string())
+        .arg(icon_path.into_os_string())
+        .arg(exe_path.clone().into_os_string())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::inherit())
+        .spawn()
+        .expect("spawn server process");
 
       // TODO: We have a race condition here because we want the spawned process to
       // start the socket server, so we don't know when its listening
       thread::sleep(std::time::Duration::from_millis(500));
       UnixStream::connect(sock_path.clone().into_os_string())
-	.expect("Failed to connect to socket; FIX THIS RACE CONDITON")
+        .expect("Failed to connect to socket; FIX THIS RACE CONDITON")
     }
   };
 
@@ -268,8 +111,19 @@ fn main() {
         Err(e) => Err(e.to_string()),
         Ok(command) => {
           match command {
-            Cmd::Exit => Ok(()),
-            Cmd::Log { msg, level } => {
+            JsCmd {
+              cmd: Cmd::LocalCommand {
+                payload: LocalCmd::Exit,
+              },
+              ..
+            } => Ok(()),
+            JsCmd {
+              cmd:
+                Cmd::LocalCommand {
+                  payload: LocalCmd::Log { msg, level },
+                },
+              ..
+            } => {
               // TODO env_logger doesn't seem to print the target. not sure if I
               // am misunderstanding the purpose of target, or if env_logger
               // just doesn't do that or what, but prefixingwith "js: " is my
@@ -302,9 +156,14 @@ fn main() {
                 }
               }
             }
-            c => to_server
-              .send((_webview.as_mut(), c))
+            JsCmd {
+              callback: Some(callback),
+              error: Some(error),
+              cmd: Cmd::ExternalCommand { payload },
+            } => to_server
+              .send((_webview.as_mut(), (payload, callback, error)))
               .map_err(|e| format!("sending error: {}", e)),
+            JsCmd { .. } => Err("JsCmd found missing callback or error".into()),
           }
         }
       }
