@@ -9,6 +9,7 @@ if (NOT EXISTS ${AUDIO_PROCESSOR_MODULE})
 endif()
 
 # Dependencies
+include(FindPkgConfig) # For libnotifymm
 include(FetchContent)
 include(cmake/formatting.cmake)
 

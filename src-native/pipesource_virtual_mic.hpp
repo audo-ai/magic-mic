@@ -2,6 +2,7 @@
 
 #include <atomic>
 #include <cstdio>
+#include <queue>
 #include <future>
 #include <iostream>
 #include <memory>
@@ -28,6 +29,9 @@ using std::shared_ptr;
 using std::string;
 using std::thread;
 using std::vector;
+using std::optional;
+using std::queue;
+
 class PipeSourceVirtualMic;
 // Only supports a single instance
 class PipeSourceVirtualMic : public VirtualMic {
@@ -48,9 +52,13 @@ public:
   future<std::exception_ptr> get_exception_future() override {
     return exception_promise.get_future();
   };
+  optional<VirtualMicUpdate> get_update() override;
 
 private:
   std::shared_ptr<spdlog::logger> logger;
+
+  mutex updates_mutex;
+  queue<VirtualMicUpdate> updates;
 
   promise<std::exception_ptr> exception_promise;
   thread async_thread;
@@ -123,6 +131,7 @@ private:
   const int target_latency = 0;
   const size_t buffer_length = 1600;
   const size_t max_denoiser_buffer = 16000;
+  const size_t max_read_stream_buffer = 16000;
   const pa_sample_spec shared_sample_spec = {
       .format = PA_SAMPLE_FLOAT32LE,
       .rate = 16000,

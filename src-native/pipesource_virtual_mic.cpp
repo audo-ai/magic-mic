@@ -448,7 +448,7 @@ void PipeSourceVirtualMic::poll_recording_stream() {
   pa_stream_state_t state = pa_stream_get_state(rec_stream.get());
 
   switch (state) {
-  case PA_STREAM_READY:
+  case PA_STREAM_READY: {
     /* stream is writable, proceed now */
     if (this->state == WaitRecStreamReady) {
       changeState(Denoise);
@@ -457,7 +457,19 @@ void PipeSourceVirtualMic::poll_recording_stream() {
         cur_act.action = CurrentAction::NoAction;
       }
     }
-    if (pa_stream_readable_size(rec_stream.get()) > 0) {
+    size_t readable_size = pa_stream_readable_size(rec_stream.get());
+    if (readable_size > max_read_stream_buffer) {
+      should_denoise = false;
+      denoiser->set_should_denoise(should_denoise);
+      {
+	std::lock_guard<mutex> lg(updates_mutex);
+	updates.push({
+	    .update = VirtualMicUpdate::UpdateAudioProcessing,
+	    .audioProcessingValue = false,
+        });
+      }
+    }
+    if (readable_size > 0) {
       const void *data;
       size_t nbytes;
       int err = pa_stream_peek(rec_stream.get(), &data, &nbytes);
@@ -470,7 +482,7 @@ void PipeSourceVirtualMic::poll_recording_stream() {
       pa_stream_drop(rec_stream.get());
     }
     break;
-
+  }
   case PA_STREAM_FAILED:
   case PA_STREAM_TERMINATED:
     /* stream is closed, exit */
@@ -725,4 +737,13 @@ std::ostream &operator<<(std::ostream &out, const pa_source_state_t state) {
   }
 #undef PROCESS_VAL
   return out << s;
+}
+optional<VirtualMicUpdate> PipeSourceVirtualMic::get_update() {
+  lock_guard<mutex> lock(updates_mutex);
+  if (!updates.empty()) {
+    auto out = updates.front();
+    updates.pop();
+    return out;
+  }
+  return std::nullopt;
 }

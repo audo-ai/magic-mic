@@ -5,10 +5,14 @@ set(PULSEAUDIO_MODULE_PATH "/usr/lib/pulse-14.0/modules" CACHE PATH "path to the
 set(VIRTMIC_ENGINE CACHE STRING "which virtual mic engine should be built")
 set_property(CACHE VIRTMIC_ENGINE PROPERTY STRINGS "PIPESOURCE")
 
+set(CMAKE_CXX_STANDARD 17)
+
 # Build Server
+
+pkg_check_modules(libnotifymm REQUIRED IMPORTED_TARGET libnotifymm-1.0)
 add_executable(server main.cpp rpc.cpp)
-set_property(TARGET server PROPERTY CXX_STANDARD 17)
 target_include_directories(server PRIVATE common/ ${tray_INCLUDE_DIR})
+target_link_libraries(server PkgConfig::libnotifymm)
 
 # TODO Not sure why I can't link it PRIVATE
 # Well, I can link with private but only if literally everything in this file is

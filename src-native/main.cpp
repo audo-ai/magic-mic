@@ -18,6 +18,8 @@
 #include <unistd.h>
 #include <dlfcn.h>
 
+#include <libnotifymm.h>
+
 #include "nlohmann/json.hpp"
 #include "spdlog/sinks/stdout_color_sinks.h"
 #include "spdlog/spdlog.h"
@@ -102,6 +104,12 @@ int main(int argc, char **argv) {
 
   signal(SIGINT, handle_sigint);
   signal(SIGHUP, SIG_IGN);
+
+  gboolean notify_inited = Notify::init("Magic Mic Daemon");
+  if (!notify_inited) {
+    // Not fatal, we'll just check whenver we need a notificatoin if it succeeded.
+    logger->error("Failed to notify_init");
+  }
 
   bool tray_exit_requested = false;
   bool open_app_requested = false;
@@ -285,6 +293,21 @@ int main(int argc, char **argv) {
       vector<json> to_write = server.pop_responses();
       for (auto j : to_write) {
         write_json(sock_fd, j);
+      }
+    }
+    auto update = mic.get_update();
+    if (update) {
+      switch (update->update) {
+      case VirtualMicUpdate::UpdateAudioProcessing:
+	logger->info("Updating audio processing likely due to high load; new "
+		     "value is: {}", update->audioProcessingValue);
+	if (Notify::is_initted()) {
+	  Notify::Notification notification("Updating audio processing likely due to high load");
+	  if (!notification.show()) {
+	    logger->error("Failed to display notification");
+	  }
+	}
+	break;
       }
     }
   }
