@@ -16,8 +16,8 @@ The rough outline for building is:
 ```sh
 mkdir build
 cd build
-cmake -DCMAKE_PREFIX_PATH=... -DLIBDENOISER_DIR=... -DVIRTMIC_ENGINE="PIPESOURCE" ..
-make install # Copies files and libs over to the src-tauri directory, NOT to system directories
+cmake -AUDIO_PROCESSOR_MODULE=... -DVIRTMIC_ENGINE="PIPESOURCE" ..
+make bundle_tauri # Copies files and libs over to the src-tauri directory
 ```
 "PIPESOURCE" is the only virtmic engine available at the moment; in the future this may change for other platform or if we implement a custom pulseaudio module
 

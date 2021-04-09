@@ -25,11 +25,13 @@ using std::stringstream;
 // little more cpp imo
 
 PipeSourceVirtualMic::PipeSourceVirtualMic(
-    std::shared_ptr<spdlog::logger> logger)
+    AudioProcessor *denoiser, std::shared_ptr<spdlog::logger> logger)
     : denoiser(), logger(logger), pipesource_module_idx(-1),
       module_load_operation(nullptr), state(InitContext),
       pb_state(PlaybackState::StreamEmpty), cur_act() {
   logger->trace("Init PipeSourceVirtualMic");
+
+  this->denoiser = denoiser;
 
   buffer = new float[buffer_length];
   write_idx = 0;
@@ -43,9 +45,6 @@ PipeSourceVirtualMic::PipeSourceVirtualMic(
   exception_promise = promise<std::exception_ptr>();
   async_thread = thread(&PipeSourceVirtualMic::run, this);
 }
-PipeSourceVirtualMic::PipeSourceVirtualMic()
-    : PipeSourceVirtualMic(
-          spdlog::create<spdlog::sinks::null_sink_st>("virtmic_null")) {}
 
 void PipeSourceVirtualMic::changeState(State s) {
   logger->trace("Pipesource changing from state {} to state {}", state, s);
@@ -79,7 +78,7 @@ void PipeSourceVirtualMic::run() {
       std::size_t willspew;
       {
         lock_guard<mutex> lock(mainloop_mutex);
-        willspew = denoiser.willspew();
+        willspew = denoiser->willspew();
       }
       // block when we won't spew
       if ((err = pa_mainloop_iterate(mainloop.get(),
@@ -117,17 +116,22 @@ void PipeSourceVirtualMic::run() {
         poll_recording_stream();
         break;
       case Denoise:
-        if (denoiser.get_buffer_size() > max_denoiser_buffer) {
+        if (denoiser->get_buffer_size() > max_denoiser_buffer) {
           logger->trace("Cutting buffer from {} to {}",
-                        denoiser.get_buffer_size(), max_denoiser_buffer / 2);
-          denoiser.drop_samples(denoiser.get_buffer_size() -
+                        denoiser->get_buffer_size(), max_denoiser_buffer / 2);
+          denoiser->drop_samples(denoiser->get_buffer_size() -
                                 max_denoiser_buffer / 2);
         }
         check_mic_active();
-        if (pb_state != Loopback && virtmic_source_state != PA_SOURCE_RUNNING) {
-          denoiser.should_denoise = false;
+	// If nothing is listening
+	if (pb_state != Loopback && virtmic_source_state != PA_SOURCE_RUNNING) {
+	  // Don't waste cpu
+          denoiser->set_should_denoise(false);
         } else {
-          denoiser.should_denoise = should_denoise;
+          denoiser->set_should_denoise(should_denoise);
+	  // If we're just getting back, clear the buffer of old stuff that no
+	  // one needs to hear
+          //denoiser->drop_samples(denoiser->get_buffer_size());
         }
         poll_recording_stream();
         write_to_outputs();
@@ -242,12 +246,12 @@ void PipeSourceVirtualMic::get_microphones() {
 void PipeSourceVirtualMic::write_to_outputs() {
   size_t spew_size;
   // logger->trace("Write, read: {}, {}", write_idx, read_idx);
-  if ((spew_size = denoiser.willspew())) {
+  if ((spew_size = denoiser->willspew())) {
     spew_size = spew_size > buffer_length ? buffer_length : spew_size;
     size_t spewed;
     if (spew_size > buffer_length - write_idx) {
       float *temp_buffer = new float[spew_size];
-      spewed = denoiser.spew(temp_buffer, spew_size);
+      spewed = denoiser->spew(temp_buffer, spew_size);
 
       if (pb_state == PlaybackState::Loopback) {
         pa_stream_write(pb_stream.get(), temp_buffer, sizeof(float) * spewed,
@@ -260,7 +264,7 @@ void PipeSourceVirtualMic::write_to_outputs() {
       write_idx = spew_size - remaining_size;
       delete[] temp_buffer;
     } else {
-      spewed = denoiser.spew(buffer + write_idx, buffer_length - write_idx);
+      spewed = denoiser->spew(buffer + write_idx, buffer_length - write_idx);
       if (pb_state == PlaybackState::Loopback) {
         pa_stream_write(pb_stream.get(), buffer + write_idx,
                         sizeof(float) * spewed, nullptr, 0, PA_SEEK_RELATIVE);
@@ -279,7 +283,6 @@ void PipeSourceVirtualMic::write_to_outputs() {
   } else {
     return;
   }
-  // logger->trace("to_write: {}", sizeof(float)*to_write);
   ssize_t written = write(pipe_fd, buffer + read_idx, sizeof(float) * to_write);
   if (written == -1) {
     switch (errno) {
@@ -463,7 +466,7 @@ void PipeSourceVirtualMic::poll_recording_stream() {
         ss << "pa_stream_peak: " << pa_strerror(err);
         throw std::runtime_error(ss.str());
       }
-      denoiser.feed((float *)data, nbytes / 4);
+      denoiser->feed((float *)data, nbytes / 4);
       pa_stream_drop(rec_stream.get());
     }
     break;

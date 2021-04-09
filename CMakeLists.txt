@@ -3,16 +3,15 @@ cmake_minimum_required(VERSION 3.10)
 # set the project name
 project(magic-mic)
 
-set(LIBDENOISER_DIR "" CACHE PATH "path to libdenoiser project")
+set(AUDIO_PROCESSOR_MODULE "" CACHE PATH "path to adudio processor shared lib")
+if (NOT EXISTS ${AUDIO_PROCESSOR_MODULE})
+  message(FATAL_ERROR "AUDIO_PROCESSOR_MODULE=\"${AUDIO_PROCESSOR_MODULE}\" does not exist")
+endif()
 
 # Dependencies
 include(FetchContent)
 include(cmake/formatting.cmake)
 
-# json
-# as explained, in its readme, this repo is unecessarily large, but, for now
-# we'll leave it as is. There are alternatives (again, as explained in its
-# readme), but this will do for now
 FetchContent_Declare(json
   GIT_REPOSITORY https://github.com/ArthurSonzogni/nlohmann_json_cmake_fetchcontent
   GIT_SHALLOW "ON"
@@ -34,7 +33,7 @@ FetchContent_Declare(spdlog
 if (NOT spdlog_POPULATED)
   FetchContent_Populate(spdlog)
 
-  option(SPDLOG_BUILD_SHARED "" ON)
+  #option(SPDLOG_BUILD_SHARED "" ON)
   add_subdirectory(${spdlog_SOURCE_DIR} ${spdlog_BINARY_DIR})
 endif()
 
@@ -48,16 +47,12 @@ if (NOT tray_POPULATED)
   add_subdirectory(${tray_SOURCE_DIR} ${tray_BINARY_DIR})
 endif()
 
-# Needs to be after fetch contents so _deps exists
-add_subdirectory(${LIBDENOISER_DIR} "./_deps/libdenoiser-build")
-
 add_subdirectory(src-native)
 
 file(GLOB_RECURSE ALL_CODE_FILES
   ${PROJECT_SOURCE_DIR}/src-native/**/*.[ch]pp
   )
-message(WARN ${ALL_CODE_FILES})
-clang_format(TARGET_NAME ${ALL_CODE_FILES})
+clang_format(format ${ALL_CODE_FILES})
 
 if (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
   #TOOD MAke depend on server
@@ -65,16 +60,15 @@ if (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
   set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -s")
 
   set_target_properties(server PROPERTIES SUFFIX "-x86_64-unknown-linux-gnu")
-  set(LIBS_TO_COPY "libpipesource,libspdlog,libgomp")
   add_custom_target(bundle_tauri ALL
     COMMAND ${CMAKE_COMMAND} -E make_directory "runtime_libs"
-    COMMAND ../scripts/get_shared_library_deps.sh $<TARGET_FILE:server> "runtime_libs" "${LIBS_TO_COPY}")
-
-  install(TARGETS server DESTINATION "${CMAKE_CURRENT_SOURCE_DIR}/src-tauri/native/")
+    COMMAND ${CMAKE_COMMAND} -E rm -Rf "${CMAKE_CURRENT_SOURCE_DIR}/src-tauri/native/runtime_libs"
+    COMMAND ${CMAKE_COMMAND} -E copy "${AUDIO_PROCESSOR_MODULE}"
+    "${CMAKE_CURRENT_BINARY_DIR}/runtime_libs/audioproc.so"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_BINARY_DIR}/runtime_libs/"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src-tauri/native/runtime_libs"
+    COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:server> "${CMAKE_CURRENT_SOURCE_DIR}/src-tauri/native/"
+    BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/runtime_libs")
 else()
   message(FATAL_ERROR "Building on anything but linux is not yet supported")
 endif() 
-
-install(DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/runtime_libs/"
-  DESTINATION "${CMAKE_CURRENT_SOURCE_DIR}/src-tauri/native/runtime_libs"
-  USE_SOURCE_PERMISSIONS)

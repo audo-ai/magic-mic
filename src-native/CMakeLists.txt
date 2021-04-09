@@ -6,7 +6,7 @@ set(VIRTMIC_ENGINE CACHE STRING "which virtual mic engine should be built")
 set_property(CACHE VIRTMIC_ENGINE PROPERTY STRINGS "PIPESOURCE")
 
 # Build Server
-add_executable(server server/main.cpp server/rpc.cpp)
+add_executable(server main.cpp rpc.cpp)
 set_property(TARGET server PROPERTY CXX_STANDARD 17)
 target_include_directories(server PRIVATE common/ ${tray_INCLUDE_DIR})
 
@@ -15,27 +15,19 @@ target_include_directories(server PRIVATE common/ ${tray_INCLUDE_DIR})
 # also linked with private. I tried that and apparently that keeps pipesource
 # from being able to find <torch/script.h> (required from denoiser.h). I'm not
 # sure why linking settings mess up includes, but I should figure that out.
-target_link_libraries(server nlohmann_json::nlohmann_json spdlog::spdlog tray)
+target_link_libraries(server dl nlohmann_json::nlohmann_json spdlog::spdlog tray)
 
 # Configure specifc virtmic engine
 if(${VIRTMIC_ENGINE} STREQUAL "PIPESOURCE")
-  add_library(pipesource SHARED pipesource/pipesource_virtual_mic.cpp)
+  add_library(pipesource STATIC pipesource_virtual_mic.cpp)
 
-  target_include_directories(pipesource PRIVATE common/)
   find_package(PulseAudio REQUIRED)
   target_include_directories(pipesource PRIVATE ${PULSEAUDIO_INCLUDE_DIR})
   target_link_libraries(pipesource PRIVATE ${PULSEAUDIO_LIBRARY})
 
   target_link_libraries(pipesource PRIVATE spdlog::spdlog)
-  # We don't want to link with denoiser (because of shared vs. static library
-  # problems, but we do want dependencies to, and we do need its includes, so we
-  # do this. Maybe we could just link the server with denoiser, but this way
-  # server doesn't have to worry about these dependencies
-  target_link_libraries(pipesource INTERFACE denoiser)
-  target_include_directories(pipesource PRIVATE "$<TARGET_PROPERTY:denoiser,INCLUDE_DIRECTORIES>")
 
   target_link_libraries(server pipesource)
-  target_include_directories(server PRIVATE pipesource/ denoiser)
   set_property(TARGET server PROPERTY COMPILE_DEFINITIONS USE_PIPESOURCE)
 else()
   get_property(TEMP CACHE VIRTMIC_ENGINE PROPERTY STRINGS)

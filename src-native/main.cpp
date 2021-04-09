@@ -16,6 +16,7 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <unistd.h>
+#include <dlfcn.h>
 
 #include "nlohmann/json.hpp"
 #include "spdlog/sinks/stdout_color_sinks.h"
@@ -67,13 +68,14 @@ int main(int argc, char **argv) {
   auto logger = spdlog::stderr_color_mt("server");
   spdlog::set_level(spdlog::level::trace);
 
-  if (argc != 4) {
-    logger->error("USAGE: {} SOCK_PATH ICON_PATH APP_PATH", argv[0]);
+  if (argc != 5) {
+    logger->error("USAGE: {} SOCK_PATH ICON_PATH APP_PATH AUDIO_PROCESSOR_PATH", argv[0]);
     return 1;
   }
   char *sock_path = argv[1];
   char *icon_path = argv[2];
   char *app_path = argv[3];
+  char *audio_processor_path = argv[4];
 
   unlink(sock_path);
 
@@ -119,10 +121,35 @@ int main(int argc, char **argv) {
     return 1;
   }
 
+  logger->info("Loading Audio Processor from {}", audio_processor_path);
+  void *audio_processor_lib = dlopen(audio_processor_path, RTLD_LAZY);
+  if (!audio_processor_path) {
+    logger->error("Cannot load Audio Processor: {}", dlerror());
+    return 1;
+  }
+  // reset errors
+  dlerror();
+  create_audio_processor_t *create_audio_processor = (create_audio_processor_t *)dlsym(audio_processor_lib, "create");
+  const char *dlsym_error = dlerror();
+  if (dlsym_error) {
+    logger->error("Cannot load Audio Processor create symbol: {}", dlsym_error);
+    return 1;
+  }
+
+  destroy_audio_processor_t *destroy_audio_processor =
+      (destroy_audio_processor_t *)dlsym(audio_processor_lib, "destroy");
+  dlsym_error = dlerror();
+  if (dlsym_error) {
+    logger->error("Cannot load Audio Processor destroy symbol: {}",
+		  dlsym_error);
+    return 1;
+  }
+  AudioProcessor *ap = create_audio_processor();
+
   logger->info("Starting {} virtual mic", VIRTUAL_MIC_NAME);
   auto l = spdlog::stderr_color_mt("virtmic");
   l->set_level(spdlog::level::trace);
-  ConcreteVirtualMic mic(l);
+  ConcreteVirtualMic mic(ap, l);
   auto err_fut = mic.get_exception_future();
 
   RPCServer server(&mic);
@@ -145,9 +172,7 @@ int main(int argc, char **argv) {
     int ret;
     FD_ZERO(&rfds);
     FD_SET(serv_fd, &rfds);
-    if (-1 != sock_fd) {
-      FD_SET(sock_fd, &rfds);
-    }
+    if (-1 != sock_fd) { FD_SET(sock_fd, &rfds); }
     tv.tv_sec = 0;
     // 10 mil nano seconds = 10 milis?
     // 100mil would probably be fine, but it tray doesn't seem to work at
@@ -263,6 +288,11 @@ int main(int argc, char **argv) {
       }
     }
   }
+
   mic.stop();
+
+  destroy_audio_processor(ap);
+  dlclose(audio_processor_lib);
+
   return 0;
 }

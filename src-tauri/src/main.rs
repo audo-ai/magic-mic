@@ -23,8 +23,8 @@ use rpc::*;
 // https://github.com/tauri-apps/tauri/issues/1308
 fn get_real_resource_dir() -> Option<PathBuf> {
   let p = tauri::api::path::resource_dir()?;
-  match env::var("APPDIR") {
-    Ok(v) => {
+  match (env::var("APPDIR"), env::var("TAURI_DEV")) {
+    (Ok(v), _) => {
       let mut root = PathBuf::from(v);
       if p.has_root() {
         // only on linux here
@@ -37,7 +37,8 @@ fn get_real_resource_dir() -> Option<PathBuf> {
       }
       Some(root)
     }
-    Err(_) => Some(p.into()),
+    (Err(_), Ok(v)) => Some(v.into()),
+    (Err(_), Err(_)) => Some(p.into()),
   }
 }
 
@@ -51,23 +52,26 @@ fn main() {
   // app is either dev or bundled. When it is dev we have to find bins
   // ourselves. Otherwise we can hopefully rely on
   // tauri_api::command::command_path
-  let server_path = match env::var("SERVER_PATH") {
+  let server_path = match env::var("TAURI_DEV") {
     Err(_) => {
       command::command_path(command::binary_command("server".to_string()).unwrap()).unwrap()
     }
-    Ok(p) => p,
+    Ok(p) => {
+      let mut path: PathBuf = p.into();
+      path.push("native");
+      path.push(command::binary_command("server".to_string()).unwrap());
+      path.into_os_string().into_string().expect("Can convert path to String")
+    },
   };
   trace!("Server Path is: {}", server_path);
 
   let resource_dir = get_real_resource_dir().expect("resource dir required");
 
-  let mut runtime_lib_path = resource_dir.clone();
-  runtime_lib_path.push("native");
-  runtime_lib_path.push("runtime_libs");
-  info!(
-    "Setting LD_LIBRARY_PATH to {:?}",
-    runtime_lib_path.clone().into_os_string()
-  );
+  let mut audio_processor_path = resource_dir.clone();
+  audio_processor_path.push("native");
+  audio_processor_path.push("runtime_libs");
+  audio_processor_path.push("audioproc.so");
+  info!("audio processor path: {:?}", audio_processor_path.clone().into_os_string());
 
   let mut icon_path = resource_dir.clone();
   icon_path.push("icons");
@@ -84,10 +88,10 @@ fn main() {
     Err(e) => {
       info!("Starting new server; error was: {}", e);
       Command::new(server_path)
-        .env("LD_LIBRARY_PATH", runtime_lib_path.into_os_string())
         .arg(sock_path.clone().into_os_string())
         .arg(icon_path.into_os_string())
         .arg(exe_path.clone().into_os_string())
+        .arg(audio_processor_path.clone().into_os_string())
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())

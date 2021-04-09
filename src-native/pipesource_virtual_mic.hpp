@@ -10,13 +10,13 @@
 #include <string>
 #include <thread>
 
+#include <pulse/pulseaudio.h>
+
 #include <spdlog/sinks/null_sink.h>
 #include <spdlog/spdlog.h>
 
-#include <pulse/pulseaudio.h>
-
-#include <denoiser.h>
-#include <virtual_mic.hpp>
+#include "virtual_mic.hpp"
+#include "audio_processor.hpp"
 
 using std::atomic;
 using std::future;
@@ -33,8 +33,7 @@ class PipeSourceVirtualMic;
 class PipeSourceVirtualMic : public VirtualMic {
 public:
   // TODO Need to implement copy constructors
-  PipeSourceVirtualMic();
-  PipeSourceVirtualMic(std::shared_ptr<spdlog::logger> logger);
+  PipeSourceVirtualMic(AudioProcessor *denoise, std::shared_ptr<spdlog::logger> logger);
   // threads aren't copyable, so neiter is this
   PipeSourceVirtualMic(PipeSourceVirtualMic &) = delete;
   ~PipeSourceVirtualMic();
@@ -178,7 +177,7 @@ private:
 
   bool should_denoise = false;
 
-  Denoiser denoiser;
+  AudioProcessor *denoiser;
 
   mutex mainloop_mutex;
   void run();
