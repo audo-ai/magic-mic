@@ -120,18 +120,18 @@ void PipeSourceVirtualMic::run() {
           logger->trace("Cutting buffer from {} to {}",
                         denoiser->get_buffer_size(), max_denoiser_buffer / 2);
           denoiser->drop_samples(denoiser->get_buffer_size() -
-                                max_denoiser_buffer / 2);
+                                 max_denoiser_buffer / 2);
         }
         check_mic_active();
-	// If nothing is listening
-	if (pb_state != Loopback && virtmic_source_state != PA_SOURCE_RUNNING) {
-	  // Don't waste cpu
+        // If nothing is listening
+        if (pb_state != Loopback && virtmic_source_state != PA_SOURCE_RUNNING) {
+          // Don't waste cpu
           denoiser->set_should_denoise(false);
         } else {
           denoiser->set_should_denoise(should_denoise);
-	  // If we're just getting back, clear the buffer of old stuff that no
-	  // one needs to hear
-          //denoiser->drop_samples(denoiser->get_buffer_size());
+          // If we're just getting back, clear the buffer of old stuff that no
+          // one needs to hear
+          // denoiser->drop_samples(denoiser->get_buffer_size());
         }
         poll_recording_stream();
         write_to_outputs();
@@ -462,10 +462,10 @@ void PipeSourceVirtualMic::poll_recording_stream() {
       should_denoise = false;
       denoiser->set_should_denoise(should_denoise);
       {
-	std::lock_guard<mutex> lg(updates_mutex);
-	updates.push({
-	    .update = VirtualMicUpdate::UpdateAudioProcessing,
-	    .audioProcessingValue = false,
+        std::lock_guard<mutex> lg(updates_mutex);
+        updates.push({
+            .update = VirtualMicUpdate::UpdateAudioProcessing,
+            .audioProcessingValue = false,
         });
       }
     }

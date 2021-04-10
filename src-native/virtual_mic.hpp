@@ -7,10 +7,10 @@
 #include <vector>
 
 using std::future;
+using std::optional;
 using std::pair;
 using std::string;
 using std::vector;
-using std::optional;
 
 struct VirtualMicUpdate {
   enum { UpdateAudioProcessing } update;

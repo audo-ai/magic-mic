@@ -9,6 +9,7 @@
 #include <utility>
 #include <vector>
 
+#include <dlfcn.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <string.h>
@@ -16,7 +17,6 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <unistd.h>
-#include <dlfcn.h>
 
 #include <libnotifymm.h>
 
@@ -71,7 +71,8 @@ int main(int argc, char **argv) {
   spdlog::set_level(spdlog::level::trace);
 
   if (argc != 5) {
-    logger->error("USAGE: {} SOCK_PATH ICON_PATH APP_PATH AUDIO_PROCESSOR_PATH", argv[0]);
+    logger->error("USAGE: {} SOCK_PATH ICON_PATH APP_PATH AUDIO_PROCESSOR_PATH",
+                  argv[0]);
     return 1;
   }
   char *sock_path = argv[1];
@@ -107,7 +108,8 @@ int main(int argc, char **argv) {
 
   gboolean notify_inited = Notify::init("Magic Mic Daemon");
   if (!notify_inited) {
-    // Not fatal, we'll just check whenver we need a notificatoin if it succeeded.
+    // Not fatal, we'll just check whenver we need a notificatoin if it
+    // succeeded.
     logger->error("Failed to notify_init");
   }
 
@@ -137,7 +139,8 @@ int main(int argc, char **argv) {
   }
   // reset errors
   dlerror();
-  create_audio_processor_t *create_audio_processor = (create_audio_processor_t *)dlsym(audio_processor_lib, "create");
+  create_audio_processor_t *create_audio_processor =
+      (create_audio_processor_t *)dlsym(audio_processor_lib, "create");
   const char *dlsym_error = dlerror();
   if (dlsym_error) {
     logger->error("Cannot load Audio Processor create symbol: {}", dlsym_error);
@@ -149,7 +152,7 @@ int main(int argc, char **argv) {
   dlsym_error = dlerror();
   if (dlsym_error) {
     logger->error("Cannot load Audio Processor destroy symbol: {}",
-		  dlsym_error);
+                  dlsym_error);
     return 1;
   }
   AudioProcessor *ap = create_audio_processor();
@@ -180,7 +183,9 @@ int main(int argc, char **argv) {
     int ret;
     FD_ZERO(&rfds);
     FD_SET(serv_fd, &rfds);
-    if (-1 != sock_fd) { FD_SET(sock_fd, &rfds); }
+    if (-1 != sock_fd) {
+      FD_SET(sock_fd, &rfds);
+    }
     tv.tv_sec = 0;
     // 10 mil nano seconds = 10 milis?
     // 100mil would probably be fine, but it tray doesn't seem to work at
@@ -299,15 +304,17 @@ int main(int argc, char **argv) {
     if (update) {
       switch (update->update) {
       case VirtualMicUpdate::UpdateAudioProcessing:
-	logger->info("Updating audio processing likely due to high load; new "
-		     "value is: {}", update->audioProcessingValue);
-	if (Notify::is_initted()) {
-	  Notify::Notification notification("Updating audio processing likely due to high load");
-	  if (!notification.show()) {
-	    logger->error("Failed to display notification");
-	  }
-	}
-	break;
+        logger->info("Updating audio processing likely due to high load; new "
+                     "value is: {}",
+                     update->audioProcessingValue);
+        if (Notify::is_initted()) {
+          Notify::Notification notification(
+              "Updating audio processing likely due to high load");
+          if (!notification.show()) {
+            logger->error("Failed to display notification");
+          }
+        }
+        break;
       }
     }
   }

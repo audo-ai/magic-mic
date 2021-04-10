@@ -2,12 +2,12 @@
 
 #include <atomic>
 #include <cstdio>
-#include <queue>
 #include <future>
 #include <iostream>
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <queue>
 #include <string>
 #include <thread>
 
@@ -16,28 +16,29 @@
 #include <spdlog/sinks/null_sink.h>
 #include <spdlog/spdlog.h>
 
-#include "virtual_mic.hpp"
 #include "audio_processor.hpp"
+#include "virtual_mic.hpp"
 
 using std::atomic;
 using std::future;
 using std::lock_guard;
 using std::mutex;
+using std::optional;
 using std::pair;
 using std::promise;
+using std::queue;
 using std::shared_ptr;
 using std::string;
 using std::thread;
 using std::vector;
-using std::optional;
-using std::queue;
 
 class PipeSourceVirtualMic;
 // Only supports a single instance
 class PipeSourceVirtualMic : public VirtualMic {
 public:
   // TODO Need to implement copy constructors
-  PipeSourceVirtualMic(AudioProcessor *denoise, std::shared_ptr<spdlog::logger> logger);
+  PipeSourceVirtualMic(AudioProcessor *denoise,
+                       std::shared_ptr<spdlog::logger> logger);
   // threads aren't copyable, so neiter is this
   PipeSourceVirtualMic(PipeSourceVirtualMic &) = delete;
   ~PipeSourceVirtualMic();

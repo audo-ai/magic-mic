@@ -51,7 +51,7 @@ endif()
 add_subdirectory(src-native)
 
 file(GLOB_RECURSE ALL_CODE_FILES
-  ${PROJECT_SOURCE_DIR}/src-native/**/*.[ch]pp
+  ${PROJECT_SOURCE_DIR}/src-native/*.[ch]pp
   )
 clang_format(format ${ALL_CODE_FILES})
 
