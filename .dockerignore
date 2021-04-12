@@ -1,10 +1,9 @@
 .DS_Store
-dist/
-build/
-node_modules/
+src-web/dist
+build
+src-web/node_modules
 thumbs.db
-.idea/
-native_build/
+.idea
 yarn-error.log
 .dir-locals.el
 .dir-local.el
@@ -12,4 +11,4 @@ yarn-error.log
 .cache
 
 src-tauri/native
-docker-build/
+src-tauri/target

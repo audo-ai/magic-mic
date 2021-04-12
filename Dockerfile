@@ -1,6 +1,6 @@
-# Must be run with DOCKER_BUILDKIT=1 and --ssh default
+# Must be run with DOCKER_BUILDKIT=1
 # syntax=docker/dockerfile:experimental
-FROM ubuntu:18.04
+FROM ubuntu:18.04 as bigbuild
 
 SHELL ["/bin/bash", "-c"]
 # For some reason, things fail to install without this command
@@ -42,23 +42,29 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y && \
 
 # magic-mic deps
 RUN DEBIAN_FRONTEND=noninteractive apt-get install -y \
-    libpulse-dev libeigen3-dev libopenmpi-dev libgomp1
+    libpulse-dev libappindicator3-dev libnotify-dev glib2.0 libgtkmm-3.0
 
-ARG PYTORCH_PREFIX
-COPY $PYTORCH_PREFIX /pytorch
+RUN wget http://ftp.gnome.org/pub/gnome/sources/libnotifymm/0.7/libnotifymm-0.7.0.tar.xz && \
+    tar xf libnotifymm-0.7.0.tar.xz && \
+    cd libnotifymm-0.7.0 && \
+    ./configure && \
+    make -j 4 install
+RUN git clone --depth=1 https://github.com/xiph/rnnoise.git && \
+    cd /rnnoise && \
+    ./autogen.sh && \
+    ./configure && \
+    make install -j 4
 
-RUN mkdir -p -m 0600 ~/.ssh && ssh-keyscan github.com >> ~/.ssh/known_hosts
-RUN --mount=type=ssh git clone git@github.com:audo-ai/libdenoiser.git /libdenoiser
-RUN --mount=type=ssh git clone git@github.com:audo-ai/magic-mic /src
+COPY . /src
 
+ARG AUDIO_PROCESSOR
 RUN cd /src && \
     mkdir build && \
     cd build && \
     cmake -DCMAKE_CXX_COMPILER=`which g++-10` \
-    	  -DCMAKE_PREFIX_PATH=/pytorch \
-    	  -DLIBDENOISER_DIR=/libdenoiser \
+	  -DCMAKE_BUILD_TYPE=RelWithDebInfo \
 	  -DVIRTMIC_ENGINE="PIPESOURCE" .. && \
-    make install -j 4
+    make install_tauri -j 4
 
 RUN \. ~/.nvm/nvm.sh && nvm use 10.19 && npm install --global yarn
 
@@ -81,3 +87,6 @@ RUN cd /src && \
     PATH=$HOME/lsmod_shim:$PATH && \
     source $HOME/.cargo/env && \
     \. ~/.nvm/nvm.sh && nvm use 10.19 && yarn tauri build
+
+FROM scratch as bin
+COPY --from=bigbuild /src/src-tauri/target/release/bundle/appimage/magic-mic.AppImage .
