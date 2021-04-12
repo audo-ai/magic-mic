@@ -28,7 +28,7 @@ private:
   DenoiseState *st;
 };
 static_assert(!std::is_abstract<RNNoiseDenoiser>::value,
-              "AudoDenoiser must be concrete");
+              "RNNDenoiser must be concrete");
 
 extern "C" {
 AudioProcessor *create() { return new RNNoiseDenoiser(); }
