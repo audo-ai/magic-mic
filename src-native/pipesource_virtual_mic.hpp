@@ -133,11 +133,7 @@ private:
   const size_t buffer_length = 1600;
   const size_t max_denoiser_buffer = 16000;
   const size_t max_read_stream_buffer = 16000;
-  pa_sample_spec shared_sample_spec = {
-      .format = PA_SAMPLE_S16NE,
-      .rate = 48000,
-      .channels = 1,
-  };
+  pa_sample_spec shared_sample_spec;
   string format_module;
   string pipe_file_name;
   // It appears c++ doesn't do non blocking writes which is a problem for

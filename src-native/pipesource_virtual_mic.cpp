@@ -32,6 +32,7 @@ PipeSourceVirtualMic::PipeSourceVirtualMic(
   logger->trace("Init PipeSourceVirtualMic");
 
   this->denoiser = denoiser;
+  shared_sample_spec.channels= 1;
   shared_sample_spec.rate = denoiser->get_sample_rate();
   switch (denoiser->get_audio_format()) {
   case AudioFormat::FLOAT32_LE:
