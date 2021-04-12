@@ -133,11 +133,12 @@ private:
   const size_t buffer_length = 1600;
   const size_t max_denoiser_buffer = 16000;
   const size_t max_read_stream_buffer = 16000;
-  const pa_sample_spec shared_sample_spec = {
-      .format = PA_SAMPLE_FLOAT32LE,
-      .rate = 16000,
+  pa_sample_spec shared_sample_spec = {
+      .format = PA_SAMPLE_S16NE,
+      .rate = 48000,
       .channels = 1,
   };
+  string format_module;
   string pipe_file_name;
   // It appears c++ doesn't do non blocking writes which is a problem for
   // signal handling, so we need to go old school (sort of, still have
@@ -145,7 +146,7 @@ private:
   int pipe_fd;
 
   // TODO: factor this out into a tiny ring buffer
-  float *buffer;
+  uint8_t *buffer;
   size_t write_idx;
   size_t read_idx;
 

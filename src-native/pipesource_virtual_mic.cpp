@@ -32,8 +32,19 @@ PipeSourceVirtualMic::PipeSourceVirtualMic(
   logger->trace("Init PipeSourceVirtualMic");
 
   this->denoiser = denoiser;
+  shared_sample_spec.rate = denoiser->get_sample_rate();
+  switch (denoiser->get_audio_format()) {
+  case AudioFormat::FLOAT32_LE:
+    shared_sample_spec.format = PA_SAMPLE_FLOAT32;
+    format_module = "float32";
+    break;
+  case AudioFormat::S16_LE:
+    shared_sample_spec.format = PA_SAMPLE_S16NE;
+    format_module = "s16ne";
+    break;
+  }
 
-  buffer = new float[buffer_length];
+  buffer = new uint8_t[buffer_length];
   write_idx = 0;
   read_idx = 0;
 
@@ -81,9 +92,10 @@ void PipeSourceVirtualMic::run() {
         willspew = denoiser->willspew();
       }
       // block when we won't spew
-      if ((err = pa_mainloop_iterate(mainloop.get(),
-                                     0 == willspew || write_idx != read_idx,
-                                     NULL)) < 0) {
+      if ((err = pa_mainloop_iterate(
+               mainloop.get(),
+               state == Denoise && (0 == willspew || write_idx != read_idx),
+               NULL)) < 0) {
         stringstream ss;
         ss << "pa_mainloop_iterate: " << pa_strerror(err);
         throw std::runtime_error(ss.str());
@@ -250,12 +262,13 @@ void PipeSourceVirtualMic::write_to_outputs() {
     spew_size = spew_size > buffer_length ? buffer_length : spew_size;
     size_t spewed;
     if (spew_size > buffer_length - write_idx) {
-      float *temp_buffer = new float[spew_size];
+      uint8_t *temp_buffer = new uint8_t[spew_size];
       spewed = denoiser->spew(temp_buffer, spew_size);
+      assert(spewed == spew_size);
 
       if (pb_state == PlaybackState::Loopback) {
-        pa_stream_write(pb_stream.get(), temp_buffer, sizeof(float) * spewed,
-                        nullptr, 0, PA_SEEK_RELATIVE);
+        pa_stream_write(pb_stream.get(), temp_buffer, spewed, nullptr, 0,
+                        PA_SEEK_RELATIVE);
       }
 
       size_t remaining_size = buffer_length - write_idx;
@@ -266,8 +279,8 @@ void PipeSourceVirtualMic::write_to_outputs() {
     } else {
       spewed = denoiser->spew(buffer + write_idx, buffer_length - write_idx);
       if (pb_state == PlaybackState::Loopback) {
-        pa_stream_write(pb_stream.get(), buffer + write_idx,
-                        sizeof(float) * spewed, nullptr, 0, PA_SEEK_RELATIVE);
+        pa_stream_write(pb_stream.get(), buffer + write_idx, spewed, nullptr, 0,
+                        PA_SEEK_RELATIVE);
       }
       write_idx = (write_idx + spewed) % buffer_length;
     }
@@ -283,7 +296,10 @@ void PipeSourceVirtualMic::write_to_outputs() {
   } else {
     return;
   }
-  ssize_t written = write(pipe_fd, buffer + read_idx, sizeof(float) * to_write);
+  // Let's just make sure that to_write is a multiple of float just to be safe
+  // with alignment stuff. Not sure if it matters here, but just being safe
+  ssize_t written =
+      write(pipe_fd, buffer + read_idx, to_write - (to_write % sizeof(float)));
   if (written == -1) {
     switch (errno) {
     case EINTR:
@@ -296,7 +312,6 @@ void PipeSourceVirtualMic::write_to_outputs() {
     }
   } else {
     // logger->trace("written: {}", written);
-    written /= sizeof(float);
     read_idx = (written + read_idx) % buffer_length;
   }
 }
@@ -357,15 +372,17 @@ void PipeSourceVirtualMic::poll_operation() {
 void PipeSourceVirtualMic::load_pipesource_module() {
   // TODO: use mktemp or whatever variant is appropraite
   pipe_file_name = "/tmp/virtmic";
-  module_load_operation = pa_context_load_module(
-      ctx.get(), "module-pipe-source",
-      "source_name=virtmic "
-      "file=/tmp/virtmic "
-      "format=float32le "
-      "rate=16000 "
-      "channels=1 "
-      "source_properties=\"device.description='Magic Mic'\"",
-      PipeSourceVirtualMic::index_cb, this);
+  stringstream ss;
+  ss << "source_name=virtmic "
+     << "file=/tmp/virtmic "
+     << "format=" << format_module << " "
+     << "rate=" << shared_sample_spec.rate << " "
+     << "channels=1 "
+     << "source_properties=\"device.description='Magic Mic'\"",
+
+      module_load_operation = pa_context_load_module(
+          ctx.get(), "module-pipe-source", ss.str().c_str(),
+          PipeSourceVirtualMic::index_cb, this);
   changeState(WaitModuleReady);
 }
 
@@ -478,7 +495,7 @@ void PipeSourceVirtualMic::poll_recording_stream() {
         ss << "pa_stream_peak: " << pa_strerror(err);
         throw std::runtime_error(ss.str());
       }
-      denoiser->feed((float *)data, nbytes / 4);
+      denoiser->feed((uint8_t *)data, nbytes);
       pa_stream_drop(rec_stream.get());
     }
     break;
