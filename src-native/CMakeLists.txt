@@ -10,15 +10,16 @@ set(PULSEAUDIO_MODULE_PATH
     CACHE PATH "path to the where to install module")
 set(VIRTMIC_ENGINE CACHE STRING "which virtual mic engine should be built")
 set_property(CACHE VIRTMIC_ENGINE PROPERTY STRINGS "PIPESOURCE")
+set(AUDIO_PROCESSOR_USE_RNNOISE
+    ON
+    CACHE BOOL "use rnnoise as the audio processor")
 set(AUDIO_PROCESSOR_MODULE
-    "rnnoise"
-    CACHE PATH "path to adudio processor shared lib or rnnoise")
-
+    CACHE PATH "path to adudio processor shared lib if not using rnnoise")
 
 set(CMAKE_CXX_STANDARD 17)
 
 # Build audio processor
-if ("${AUDIO_PROCESSOR_MODULE}" STREQUAL "rnnoise")
+if(${AUDIO_PROCESSOR_USE_RNNOISE})
   message(STATUS "Using rnnoise as audio processor module")
   pkg_check_modules(rnnoise REQUIRED IMPORTED_TARGET rnnoise)
   add_library(audioproc MODULE rnnoise_proc.cpp)
@@ -26,10 +27,18 @@ if ("${AUDIO_PROCESSOR_MODULE}" STREQUAL "rnnoise")
 elseif(NOT EXISTS ${AUDIO_PROCESSOR_MODULE})
   message(FATAL_ERROR "${AUDIO_PROCESSOR_MODULE} not found")
 else()
-  message(STATUS "Using ${AUDIO_PROCESSOR_MODULE} as audio processor module")
-  add_library(audioproc MODULE IMPORTED GLOBAL)
-  set_target_properties(audioproc PROPERTIES IMPORTED_LOCATION
-                                             "${AUDIO_PROCESSOR_MODULE}")
+  execute_process(
+    COMMAND ldd ${AUDIO_PROCESSOR_MODULE}
+    RESULT_VARIABLE LDD_STATUS
+    OUTPUT_QUIET ERROR_QUIET)
+  if(${LDD_STATUS} EQUAL 0)
+    message(STATUS "Using ${AUDIO_PROCESSOR_MODULE} as audio processor module")
+    add_library(audioproc MODULE IMPORTED GLOBAL)
+    set_target_properties(audioproc PROPERTIES IMPORTED_LOCATION
+                                               "${AUDIO_PROCESSOR_MODULE}")
+  else()
+    message(FATAL_ERROR "${AUDIO_PROCESSOR_MODULE} is not a shared library")
+  endif()
 endif()
 
 # Build Server

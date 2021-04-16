@@ -67,7 +67,7 @@ if(${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
             "${CMAKE_CURRENT_SOURCE_DIR}/src-tauri/native/runtime_libs"
     COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:audioproc>"
             "${CMAKE_CURRENT_BINARY_DIR}/runtime_libs/audioproc.so"
-	    DEPENDS audioproc server
+    DEPENDS audioproc server
     BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/runtime_libs")
   add_custom_target(
     install_tauri
