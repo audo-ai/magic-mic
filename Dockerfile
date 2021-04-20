@@ -1,6 +1,7 @@
 # Must be run with DOCKER_BUILDKIT=1
 # syntax=docker/dockerfile:experimental
-FROM ubuntu:18.04 as bigbuild
+ARG AUDIO_PROCESSOR_IMAGE=deps
+FROM ubuntu:18.04 as deps
 
 SHELL ["/bin/bash", "-c"]
 # For some reason, things fail to install without this command
@@ -55,14 +56,19 @@ RUN git clone --depth=1 https://github.com/xiph/rnnoise.git && \
     ./configure && \
     make install -j 4
 
-COPY . /src
+FROM $AUDIO_PROCESSOR_IMAGE as audioproc
 
-ARG AUDIO_PROCESSOR
+FROM deps as build 
+COPY --from=audioproc /audioproc.so /audioproc.so
+
+COPY . /src
 RUN cd /src && \
     mkdir build && \
     cd build && \
     cmake -DCMAKE_CXX_COMPILER=`which g++-10` \
 	  -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+	  -DAUDIO_PROCESSOR_USE_RNNOISE=`[[${AUDIO_PROCESSOR_IMAGE} = "deps"]] && "ON" || "OFF"` \
+	  -DAUDIO_PROCESSOR_MODULE=/audioproc.so \
 	  -DVIRTMIC_ENGINE="PIPESOURCE" .. && \
     make install_tauri -j 4
 
@@ -89,4 +95,4 @@ RUN cd /src && \
     \. ~/.nvm/nvm.sh && nvm use 10.19 && yarn tauri build
 
 FROM scratch as bin
-COPY --from=bigbuild /src/src-tauri/target/release/bundle/appimage/magic-mic.AppImage .
+COPY --from=build /src/src-tauri/target/release/bundle/appimage/magic-mic.AppImage .

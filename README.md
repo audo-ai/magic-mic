@@ -30,7 +30,7 @@ still quite far from realizing this vision, so reach out if you want to help!
 ### Structure
 This project has esentially 3 components. First, there is the code in `src-native` which interacts with the audio system and actually creates the virtual microphone and does the denoising. Then there is the [tauri](https://tauri.studio/en/) code in `src-tauri` which deals with creating the system webview and interacting with the frontend code. The naming of these directories is somewhat misleading, because both the code in `src-native` and the code in `src-tauri` are compiled to native code. Additionaly, there is `src-web` which contains a `create-react-app` project which is displayed by tauri. 
 
-### Building
+### Building Locally
 You can use the dockerfiles for development or your local machine. The
 dockerfiles are not optimized yet, so will likely be quite a pain to use. For
 the moment they can serve as a guide for installing dependencies.
@@ -45,7 +45,7 @@ make install_tauri # Copies files and libs over to the src-tauri directory
 "PIPESOURCE" is the only virtmic engine available at the moment; in the future
 this may change for other platform or if we implement other virtual microphones.
 
-### Frontend
+#### Frontend
 First you need to install [tauri](https://tauri.studio/en/). Then you need to
 run `yarn` from the project root directory and the `src-web` directory. From
 there, running the app should be as simple as running `yarn tauri dev`, however
@@ -53,3 +53,20 @@ tauri has some bugs currently so you need to run
 ```sh
 RUST_LOG=trace TAURI_DEV=/home/gabe/code/audo/project-x/src-tauri/ yarn tauri dev
 ```
+### Building with Docker
+We use Docker builds for releases, but you can also use them for testing or just
+as a reference if you like. To make a build using rnnoise simply run
+```sh
+DOCKER_BUILDKIT=1 docker build .
+```
+To build using a custom audio processor you need to have another docker image
+with the shared library located at `/audioproc.so`. Then run
+
+```sh
+DOCKER_BUILDKIT=1 docker build --build-arg AUDIO_PROCESSOR_IMAGE=$DOCKER_IMAGE .
+```
+You should end up with an appimage in your build directory when everything is
+done.
+
+Using the docker build for development is a pain right now because very little is
+cached, but we are looking to improve that.
