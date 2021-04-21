@@ -11,5 +11,8 @@ yarn-error.log
 .#*
 .cache
 
+*.so
+*.AppImage
+
 src-tauri/native
 docker-build/
