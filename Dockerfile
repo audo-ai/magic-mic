@@ -58,16 +58,20 @@ RUN git clone --depth=1 https://github.com/xiph/rnnoise.git && \
 
 FROM $AUDIO_PROCESSOR_IMAGE as audioproc
 
-FROM deps as build 
-COPY --from=audioproc /audioproc.so /audioproc.so
+FROM deps as build
+
+# The .so? is a hacky way to optionally copy file (copies wildcard of audioproc.s and audioproc.so)
+COPY --from=audioproc /audioproc.so? /audioproc.so
 
 COPY . /src
+
+ARG AUDIO_PROCESSOR_IMAGE
 RUN cd /src && \
     mkdir build && \
     cd build && \
     cmake -DCMAKE_CXX_COMPILER=`which g++-10` \
 	  -DCMAKE_BUILD_TYPE=RelWithDebInfo \
-	  -DAUDIO_PROCESSOR_USE_RNNOISE=`[[${AUDIO_PROCESSOR_IMAGE} = "deps"]] && "ON" || "OFF"` \
+	  -DAUDIO_PROCESSOR_USE_RNNOISE=$([ "${AUDIO_PROCESSOR_IMAGE}" = "deps" ] && echo "ON" || echo "OFF") \
 	  -DAUDIO_PROCESSOR_MODULE=/audioproc.so \
 	  -DVIRTMIC_ENGINE="PIPESOURCE" .. && \
     make install_tauri -j 4
