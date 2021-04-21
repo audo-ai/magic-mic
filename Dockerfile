@@ -1,4 +1,4 @@
-# must be run with docker_buildkit=1
+# Must be run with DOCKER_BUILDKIT=1
 # syntax=docker/dockerfile:experimental
 ARG AUDIO_PROCESSOR_IMAGE=deps
 FROM ubuntu:18.04 as deps
