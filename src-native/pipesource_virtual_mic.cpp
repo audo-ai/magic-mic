@@ -32,7 +32,7 @@ PipeSourceVirtualMic::PipeSourceVirtualMic(
   logger->trace("Init PipeSourceVirtualMic");
 
   this->denoiser = denoiser;
-  shared_sample_spec.channels= 1;
+  shared_sample_spec.channels = 1;
   shared_sample_spec.rate = denoiser->get_sample_rate();
   switch (denoiser->get_audio_format()) {
   case AudioFormat::FLOAT32_LE:
@@ -122,6 +122,12 @@ void PipeSourceVirtualMic::run() {
       case WaitModuleReady:
         poll_operation();
         break;
+      case GetDefaultSource:
+        if (!get_default_source_op) {
+          get_default_source_op =
+              pa_context_get_server_info(ctx.get(), serv_info_cb, this);
+        }
+        break;
       case InitRecStream:
         start_recording_stream();
         break;
@@ -192,6 +198,18 @@ void PipeSourceVirtualMic::set_microphone() {
     cur_act.set_mic.state =
         SetMicrophone::SetMicrophoneActionState::WaitGettingSource;
     break;
+  }
+}
+void PipeSourceVirtualMic::serv_info_cb(pa_context *c, const pa_server_info *i,
+                                        void *u) {
+  PipeSourceVirtualMic *m = (PipeSourceVirtualMic *)u;
+  if (i) {
+    m->source = i->default_source_name;
+    pa_operation_unref(m->get_default_source_op);
+    m->get_default_source_op = nullptr;
+    m->state = InitRecStream;
+  } else {
+    m->logger->error("serv_info_cb get null pa_serve_info");
   }
 }
 void PipeSourceVirtualMic::source_info_cb(pa_context *c,

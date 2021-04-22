@@ -110,6 +110,7 @@ private:
     WaitCheckModuleLoaded,
     InitModule,
     WaitModuleReady,
+    GetDefaultSource,
     InitRecStream,
     WaitRecStreamReady,
     Denoise
@@ -182,6 +183,8 @@ private:
   pa_usec_t mic_active_interval = 10000;
   pa_operation *mic_active_op = nullptr;
 
+  pa_operation *get_default_source_op = nullptr;
+
   bool should_denoise = false;
 
   AudioProcessor *denoiser;
@@ -204,6 +207,7 @@ private:
 
   void set_microphone();
   void get_microphones();
+  static void serv_info_cb(pa_context *c, const pa_server_info *i, void *u);
   static void source_info_cb(pa_context *c, const pa_source_info *i, int eol,
                              void *u);
   static void mic_active_source_info_cb(pa_context *c, const pa_source_info *i,
