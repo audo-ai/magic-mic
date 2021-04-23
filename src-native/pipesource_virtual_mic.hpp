@@ -49,7 +49,9 @@ public:
   future<pair<int, vector<pair<int, string>>>> getMicrophones() override;
   future<void> setMicrophone(int) override;
   future<void> setRemoveNoise(bool) override;
+  future<bool> getRemoveNoise() override;
   future<bool> setLoopback(bool) override;
+  future<bool> getLoopback() override;
   future<std::exception_ptr> get_exception_future() override {
     return exception_promise.get_future();
   };

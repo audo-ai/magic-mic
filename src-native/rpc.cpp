@@ -66,6 +66,10 @@ RPCServer::Request RPCServer::parse_request(json j) {
     }
     req.type = RequestTypes::SetLoopback;
     req.shouldLoopback = j["params"].get<bool>();
+  } else if (method == "getLoopback") {
+    req.type = RequestTypes::GetLoopback;
+  } else if (method == "getRemoveNoise") {
+    req.type = RequestTypes::GetRemoveNoise;
   }
   return req;
 }
@@ -107,10 +111,22 @@ void RPCServer::pump() {
                           .fut = mic->setRemoveNoise(req.shouldRemoveNoise)};
       break;
     }
+    case RequestTypes::GetRemoveNoise: {
+      current_response = {.type = req.type,
+                          .id = req.id,
+                          .fut = mic->getRemoveNoise()};
+      break;
+    }
     case RequestTypes::SetLoopback: {
       current_response = {.type = req.type,
                           .id = req.id,
                           .fut = mic->setLoopback(req.shouldLoopback)};
+      break;
+    }
+    case RequestTypes::GetLoopback: {
+      current_response = {.type = req.type,
+                          .id = req.id,
+                          .fut = mic->getLoopback()};
       break;
     }
     }
@@ -124,6 +140,9 @@ vector<json> RPCServer::pop_responses() {
   Response &resp = current_response.value();
 
   switch (resp.type) {
+  case RequestTypes::GetLoopback:
+  case RequestTypes::GetRemoveNoise:
+  case RequestTypes::SetLoopback: {
   case RequestTypes::GetStatus: {
     auto &fut = std::get<future<bool>>(resp.fut);
     if (fut.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
@@ -168,13 +187,6 @@ vector<json> RPCServer::pop_responses() {
     }
     break;
   }
-  case RequestTypes::SetLoopback: {
-    auto &f = std::get<future<bool>>(resp.fut);
-    if (f.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
-      out.push_back(make_response(resp.id, f.get()));
-      current_response.reset();
-    }
-    break;
   }
   default:
     throw std::runtime_error("Unknown request enountered in handle_request");

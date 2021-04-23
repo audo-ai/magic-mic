@@ -659,6 +659,14 @@ future<void> PipeSourceVirtualMic::setRemoveNoise(bool b) {
   p.set_value();
   return p.get_future();
 }
+future<bool> PipeSourceVirtualMic::getRemoveNoise() {
+  lock_guard<mutex> lock(mainloop_mutex);
+
+  promise<bool> p;
+  // TODO this should be something like denoiser->get_should_denoise but that isn't implemented yet
+  p.set_value(should_denoise);
+  return p.get_future();
+}
 future<bool> PipeSourceVirtualMic::setLoopback(bool b) {
   lock_guard<mutex> lock(mainloop_mutex);
   if (state < InitRecStream) {
@@ -700,6 +708,13 @@ future<bool> PipeSourceVirtualMic::setLoopback(bool b) {
 
   pa_mainloop_wakeup(mainloop.get());
   return pb_promise.get_future();
+}
+future<bool> PipeSourceVirtualMic::getLoopback() {
+  lock_guard<mutex> lock(mainloop_mutex);
+
+  promise<bool> p;
+  p.set_value(pb_state == Loopback);
+  return p.get_future();
 }
 void PipeSourceVirtualMic::abortLastRequest() {
   lock_guard<mutex> lock(mainloop_mutex);

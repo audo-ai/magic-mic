@@ -62,11 +62,29 @@ const DeviceSelector = ({ title, current, icon, devices, switchToDevice }) => {
     }
   }
   const [device, setDevice] = useState();
-  const [remove, setRemove] = useState(false);
+  const [remove, setRemove] = useState(null);
+  useEffect(() => {
+    let cb = () => {
+      promisified(makeExternalCmd({ cmd: "getRemoveNoise" }))
+        .then((res) => {
+          setRemove(res);
+        })
+        .catch((v) =>
+          log(`getRemoveNoise error: "${JSON.stringify(v)}"`, ERROR)
+        );
+    };
+    cb();
+    let interval = setInterval(cb, 2000);
+    return () => clearInterval(interval);
+  }, [setRemove]);
   useEffect(() => {
     setDevice(cur);
   }, [current]);
   useEffect(() => {
+    if (remove === null) {
+      log("remove is null", TRACE);
+      return;
+    }
     promisified(makeExternalCmd({ cmd: "setShouldRemoveNoise", value: remove }))
       .then((v) =>
         log(`setShouldRemoveNoise response: "${JSON.stringify(v)}"`, TRACE)
@@ -111,8 +129,20 @@ const DeviceSelector = ({ title, current, icon, devices, switchToDevice }) => {
 const App = () => {
   const [devices, setDevices] = useState([]);
   const [curDevice, setCurrentDevice] = useState();
-  const [loopback, setLoopback] = useState(false);
+  const [loopback, setLoopback] = useState(null);
   const [status, setStatus] = useState("Waiting");
+  useEffect(() => {
+    let cb = () => {
+      promisified(makeExternalCmd({ cmd: "getLoopback" }))
+        .then((res) => {
+          setLoopback(res);
+        })
+        .catch((v) => log(`getLoopback error: "${JSON.stringify(v)}"`, ERROR));
+    };
+    cb();
+    let interval = setInterval(cb, 2000);
+    return () => clearInterval(interval);
+  }, [setLoopback]);
   useEffect(() => {
     // This clear interval stuff is definetly broken. Need to fix it
     const cb = () => {
@@ -156,6 +186,9 @@ const App = () => {
   }, []);
   useEffect(() => {
     // TODO: Handle errors
+    if (loopback === null) {
+      return;
+    }
     if (devices.length > 0) {
       promisified(makeExternalCmd({ cmd: "setLoopback", value: loopback }))
         .then((v) => log(`setLoopback response: "${JSON.stringify(v)}"`, TRACE))

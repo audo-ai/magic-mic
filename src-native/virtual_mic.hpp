@@ -30,7 +30,9 @@ public:
   virtual future<pair<int, vector<pair<int, string>>>> getMicrophones() = 0;
   virtual future<void> setMicrophone(int) = 0;
   virtual future<void> setRemoveNoise(bool) = 0;
+  virtual future<bool> getRemoveNoise() = 0;
   virtual future<bool> setLoopback(bool) = 0;
+  virtual future<bool> getLoopback() = 0;
 
   virtual future<std::exception_ptr> get_exception_future() = 0;
   virtual optional<VirtualMicUpdate> get_update() = 0;

@@ -39,7 +39,9 @@ private:
     GetMicrophones,
     SetMicrophone,
     SetRemoveNoise,
-    SetLoopback
+    GetRemoveNoise,
+    SetLoopback,
+    GetLoopback
   };
 
   struct Request {

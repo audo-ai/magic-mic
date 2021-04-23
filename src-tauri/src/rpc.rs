@@ -59,6 +59,22 @@ fn set_microphones(ind: i32) -> JSONRpcReq {
     params: Some(serde_json::Value::Number(serde_json::Number::from(ind))),
   }
 }
+fn get_remove_noise() -> JSONRpcReq {
+  JSONRpcReq {
+    jsonrpc: "2.0".to_string(),
+    method: "getRemoveNoise".to_string(),
+    id: get_id(), // TODO make this random
+    params: None,
+  }
+}
+fn get_loopback() -> JSONRpcReq {
+  JSONRpcReq {
+    jsonrpc: "2.0".to_string(),
+    method: "getLoopback".to_string(),
+    id: get_id(), // TODO make this random
+    params: None,
+  }
+}
 fn set_loopback(b: bool) -> JSONRpcReq {
   JSONRpcReq {
     jsonrpc: "2.0".to_string(),
@@ -89,6 +105,8 @@ fn get_rpc_req(event: ServerCmd) -> JSONRpcReq {
     ServerCmd::SetLoopback { value } => set_loopback(value),
     ServerCmd::GetMicrophones {} => get_microphones(),
     ServerCmd::SetMicrophone { value } => set_microphones(value),
+    ServerCmd::GetLoopback { } => get_loopback(),
+    ServerCmd::GetRemoveNoise { } => get_remove_noise(),
   }
 }
 fn try_read_to_newline(server: &mut UnixStream, buf: &mut String) {

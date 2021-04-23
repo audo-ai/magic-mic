@@ -21,6 +21,8 @@ pub enum Cmd {
 #[serde(tag = "cmd", rename_all = "camelCase")]
 pub enum ServerCmd {
   GetStatus,
+  GetLoopback,
+  GetRemoveNoise,
   SetLoopback { value: bool },
   SetShouldRemoveNoise { value: bool },
   SetMicrophone { value: i32 },
