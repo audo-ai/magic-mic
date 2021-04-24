@@ -176,13 +176,20 @@ const App = () => {
     cb();
   }, [status]);
   useEffect(() => {
-    promisified(makeExternalCmd({ cmd: "getMicrophones" }))
-      .then((v) => {
-        setDevices(v["list"]);
-        setCurrentDevice(v["cur"]);
-        log(`getMicrophones response: "${JSON.stringify(v)}"`, TRACE);
-      })
-      .catch((v) => log(`getMicrophones error: "${JSON.stringify(v)}"`, ERROR));
+    let cb = () => {
+      promisified(makeExternalCmd({ cmd: "getMicrophones" }))
+        .then((v) => {
+          setDevices(v["list"]);
+          setCurrentDevice(v["cur"]);
+          log(`getMicrophones response: "${JSON.stringify(v)}"`, TRACE);
+        })
+        .catch((v) =>
+          log(`getMicrophones error: "${JSON.stringify(v)}"`, ERROR)
+        );
+    };
+    cb();
+    let int = setInterval(cb, 5000);
+    return () => clearInterval(int);
   }, []);
   useEffect(() => {
     // TODO: Handle errors
