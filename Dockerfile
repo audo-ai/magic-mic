@@ -8,7 +8,7 @@ SHELL ["/bin/bash", "-c"]
 RUN apt-get update && apt-get install -y --no-install-recommends apt-utils
 
 # General softare build deps
-RUN DEBIAN_FRONTEND=noninteractive apt-get install -y \
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
     git bash curl snapd wget software-properties-common
 
 # Get newer version of g++ (this may no longer be necessary)
@@ -22,7 +22,7 @@ RUN wget https://github.com/Kitware/CMake/releases/download/v3.19.5/cmake-3.19.5
     rm cmake-3.19.5-Linux-x86_64.sh
 
 # Tauri deps
-RUN DEBIAN_FRONTEND=noninteractive apt-get install -y \
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
     build-essential \
     curl \
     wget \
@@ -45,7 +45,7 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y && \
     cargo install tauri-bundler --force
 
 # magic-mic deps
-RUN DEBIAN_FRONTEND=noninteractive apt-get install -y \
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
     libpulse-dev libappindicator3-dev libnotify-dev glib2.0 libgtkmm-3.0
 RUN wget http://ftp.gnome.org/pub/gnome/sources/libnotifymm/0.7/libnotifymm-0.7.0.tar.xz && \
     tar xf libnotifymm-0.7.0.tar.xz && \
