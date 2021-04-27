@@ -11,6 +11,8 @@ the microphone in whatever audio consuming app you are using (zoom, discord,
 google meet) to Magic Mic and you're off! This is still in **early** alpha and
 so is only available for pulseaudio on linux right now. This is still in active development and so bug fixes and new features will be coming, along with OS X and Windows support in the future.
 
+You can get a prebuilt version of magic mic from our [releases](https://github.com/audo-ai/magic-mic/releases).
+
 ## Open Source
 Our custom denoising model is proprietary. Only us at Audo can create builds
 using it as the denoising engine. If you would like to build Magic Mic yourself,
