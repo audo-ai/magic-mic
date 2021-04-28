@@ -60,18 +60,30 @@ fn main() {
       let mut path: PathBuf = p.into();
       path.push("native");
       path.push(command::binary_command("server".to_string()).unwrap());
-      path.into_os_string().into_string().expect("Can convert path to String")
-    },
+      path
+        .into_os_string()
+        .into_string()
+        .expect("Can convert path to String")
+    }
   };
   trace!("Server Path is: {}", server_path);
 
   let resource_dir = get_real_resource_dir().expect("resource dir required");
 
-  let mut audio_processor_path = resource_dir.clone();
-  audio_processor_path.push("native");
-  audio_processor_path.push("runtime_libs");
+  let mut runtime_lib_path = resource_dir.clone();
+  runtime_lib_path.push("native");
+  runtime_lib_path.push("runtime_libs");
+  info!(
+    "runtime lib path: {:?}",
+    runtime_lib_path.clone().into_os_string()
+  );
+
+  let mut audio_processor_path = runtime_lib_path.clone();
   audio_processor_path.push("audioproc.so");
-  info!("audio processor path: {:?}", audio_processor_path.clone().into_os_string());
+  info!(
+    "audio processor path: {:?}",
+    audio_processor_path.clone().into_os_string()
+  );
 
   let mut icon_path = resource_dir.clone();
   icon_path.push("icons");
@@ -88,6 +100,7 @@ fn main() {
     Err(e) => {
       info!("Starting new server; error was: {}", e);
       Command::new(server_path)
+        .env("LD_LIBRARY_PATH", runtime_lib_path.into_os_string())
         .arg(sock_path.clone().into_os_string())
         .arg(icon_path.into_os_string())
         .arg(exe_path.clone().into_os_string())
