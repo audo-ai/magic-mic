@@ -1,0 +1,22 @@
+name: Build AppImage using RNNoise module
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Build AppImage
+      run: DOCKER_BUILDKIT=1 docker build . --output .
+    - name: Rename AppImage
+      run: mv magic-mic.AppImage magic-mic_$(git rev-parse HEAD | cut -c 1-8)_rnnoise.AppImage
+    - name: Upload AppImage
+      uses: actions/upload-artifact@master
+      with:
+        path: magic-mic_*.AppImage
+        if-no-files-found: error
