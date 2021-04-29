@@ -15,18 +15,21 @@ if ! test -d "$DEST"; then
 fi
 shift 2
 
+if test -z "$@"; then
+    echo "No libraries requested"
+    exit 0
+fi
 IFS=',' read -d '' -r -a TARGETS <<< "$@"
-#printf "Targets: %s\n" "${TARGETS[@]}"
+# printf "Targets: \"%s\"\n" "${TARGETS[@]}"
 
 REGEX=$(join_by '|' "${TARGETS[@]}")
 IFS=$'\n' read -d '' -r -a LIBS <<< "$(ldd "$EXE" | sed -E -e "s/^.*($REGEX).*=> (\/[^ ]*).*$/\2/;t;d")"
 
 if ! test ${#LIBS[@]} -eq ${#TARGETS[@]}; then
     echo "Not enough libs found in executable"
+    printf 'Requested: "%s"\n' "$@"
+    printf 'Requested/Found: %s/%s\n' "${#TARGETS[@]}" "${#LIBS[@]}"
     printf 'Found: %s\n' "${LIBS[@]}"
-    echo ${#TARGETS[@]}
-    echo ${#LIBS[@]}
-    printf 'Requested: %s\n' "$@"
     exit 3
 fi
 

@@ -59,8 +59,12 @@ if(${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
   set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -s")
   set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -s")
 
-  set(MAIN_LIBS_TO_COPY "libnotifymm")
-  set(AUDIOPROC_LIBS_TO_COPY "librnnoise")
+  set(MAIN_LIBS_TO_COPY "libnotifymm,libnotify")
+  if (${AUDIO_PROCESSOR_USE_RNNOISE})
+    set(AUDIOPROC_LIBS_TO_COPY "librnnoise")
+  else()
+    set(AUDIOPROC_LIBS_TO_COPY "")
+  endif()
 
   set_target_properties(server PROPERTIES SUFFIX "-x86_64-unknown-linux-gnu")
   add_custom_target(
