@@ -1,4 +1,4 @@
-name: Build AppImage using Audo AI module
+name: Build Audo AI AppImage
 
 on:
   push:

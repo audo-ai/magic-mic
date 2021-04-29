@@ -1,4 +1,4 @@
-name: Build AppImage using RNNoise module
+name: Build RNNoise AppImage
 
 on:
   push:
