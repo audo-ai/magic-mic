@@ -59,7 +59,8 @@ if(${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
   set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -s")
   set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -s")
 
-  set(LIBS_TO_COPY "libnotifymm")
+  set(MAIN_LIBS_TO_COPY "libnotifymm")
+  set(AUDIOPROC_LIBS_TO_COPY "librnnoise")
 
   set_target_properties(server PROPERTIES SUFFIX "-x86_64-unknown-linux-gnu")
   add_custom_target(
@@ -68,7 +69,9 @@ if(${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
     COMMAND ${CMAKE_COMMAND} -E rm -Rf
             "${CMAKE_CURRENT_SOURCE_DIR}/src-tauri/native/runtime_libs"
     COMMAND ../scripts/get_shared_library_deps.sh $<TARGET_FILE:server>
-            "runtime_libs" "${LIBS_TO_COPY}"
+            "runtime_libs" "${MAIN_LIBS_TO_COPY}"
+    COMMAND ../scripts/get_shared_library_deps.sh $<TARGET_FILE:audioproc>
+            "runtime_libs" "${AUDIOPROC_LIBS_TO_COPY}"
     COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:audioproc>"
             "${CMAKE_CURRENT_BINARY_DIR}/runtime_libs/audioproc.so"
     DEPENDS audioproc server

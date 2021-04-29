@@ -18,12 +18,29 @@ set(AUDIO_PROCESSOR_MODULE
 
 set(CMAKE_CXX_STANDARD 17)
 
+# Build Server
+pkg_check_modules(libnotifymm REQUIRED IMPORTED_TARGET libnotifymm-1.0)
+add_executable(server main.cpp rpc.cpp)
+target_include_directories(server PRIVATE common/ ${tray_INCLUDE_DIR})
+target_link_libraries(server PkgConfig::libnotifymm)
+
+# TODO Not sure why I can't link it PRIVATE Well, I can link with private but
+# only if literally everything in this file is also linked with private. I tried
+# that and apparently that keeps pipesource from being able to find
+# <torch/script.h> (required from denoiser.h). I'm not sure why linking settings
+# mess up includes, but I should figure that out.
+target_link_libraries(server dl nlohmann_json::nlohmann_json spdlog::spdlog
+                      tray)
+
 # Build audio processor
 if(${AUDIO_PROCESSOR_USE_RNNOISE})
   message(STATUS "Using rnnoise as audio processor module")
   pkg_check_modules(rnnoise REQUIRED IMPORTED_TARGET rnnoise)
   add_library(audioproc MODULE rnnoise_proc.cpp)
-  target_link_libraries(audioproc rnnoise)
+  target_link_libraries(audioproc PkgConfig::rnnoise)
+  # This is just so librnnoise can be found by get_shared_library_deps and
+  # distributed
+  target_link_libraries(server PkgConfig::rnnoise)
 elseif(NOT EXISTS ${AUDIO_PROCESSOR_MODULE})
   message(FATAL_ERROR "${AUDIO_PROCESSOR_MODULE} not found")
 else()
@@ -40,20 +57,6 @@ else()
     message(FATAL_ERROR "${AUDIO_PROCESSOR_MODULE} is not a shared library")
   endif()
 endif()
-
-# Build Server
-pkg_check_modules(libnotifymm REQUIRED IMPORTED_TARGET libnotifymm-1.0)
-add_executable(server main.cpp rpc.cpp)
-target_include_directories(server PRIVATE common/ ${tray_INCLUDE_DIR})
-target_link_libraries(server PkgConfig::libnotifymm)
-
-# TODO Not sure why I can't link it PRIVATE Well, I can link with private but
-# only if literally everything in this file is also linked with private. I tried
-# that and apparently that keeps pipesource from being able to find
-# <torch/script.h> (required from denoiser.h). I'm not sure why linking settings
-# mess up includes, but I should figure that out.
-target_link_libraries(server dl nlohmann_json::nlohmann_json spdlog::spdlog
-                      tray)
 
 # Configure specifc virtmic engine
 if(${VIRTMIC_ENGINE} STREQUAL "PIPESOURCE")
