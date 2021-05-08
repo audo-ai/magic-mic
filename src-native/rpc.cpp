@@ -70,6 +70,13 @@ RPCServer::Request RPCServer::parse_request(json j) {
     req.type = RequestTypes::GetLoopback;
   } else if (method == "getRemoveNoise") {
     req.type = RequestTypes::GetRemoveNoise;
+  } else if (method == "getProcessors") {
+    req.type = RequestTypes::GetProcessors;
+  } else if (method == "setProcessor") {
+    req.type = RequestTypes::SetProcessor;
+    req.apId = j["params"].get<int>();
+  } else {
+    throw make_error(-32600, "Invalid Request");
   }
   return req;
 }
@@ -112,9 +119,8 @@ void RPCServer::pump() {
       break;
     }
     case RequestTypes::GetRemoveNoise: {
-      current_response = {.type = req.type,
-                          .id = req.id,
-                          .fut = mic->getRemoveNoise()};
+      current_response = {
+          .type = req.type, .id = req.id, .fut = mic->getRemoveNoise()};
       break;
     }
     case RequestTypes::SetLoopback: {
@@ -124,9 +130,29 @@ void RPCServer::pump() {
       break;
     }
     case RequestTypes::GetLoopback: {
-      current_response = {.type = req.type,
-                          .id = req.id,
-                          .fut = mic->getLoopback()};
+      current_response = {
+          .type = req.type, .id = req.id, .fut = mic->getLoopback()};
+      break;
+    }
+    case RequestTypes::GetProcessors: {
+      // TODO: do we really want to fulfill request in rpc?
+      std::promise<pair<int, vector<AudioProcessor::Info>>> p;
+      current_response = {
+          .type = req.type, .id = req.id, .fut = p.get_future()};
+      vector<AudioProcessor::Info> infos;
+      for (auto &ap : apm.get_audio_processors()) {
+        infos.push_back(ap.get()->get_info());
+      }
+      p.set_value(std::make_pair(apm.get_current(), infos));
+      break;
+    }
+    case RequestTypes::SetProcessor: {
+      std::promise<void> p;
+      // TODO Bounds checking and whatnot
+      mic->setAudioProcessor(apm.set_current(req.apId).get());
+      current_response = {
+          .type = req.type, .id = req.id, .fut = p.get_future()};
+      p.set_value();
       break;
     }
     }
@@ -142,7 +168,7 @@ vector<json> RPCServer::pop_responses() {
   switch (resp.type) {
   case RequestTypes::GetLoopback:
   case RequestTypes::GetRemoveNoise:
-  case RequestTypes::SetLoopback: {
+  case RequestTypes::SetLoopback:
   case RequestTypes::GetStatus: {
     auto &fut = std::get<future<bool>>(resp.fut);
     if (fut.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
@@ -171,6 +197,7 @@ vector<json> RPCServer::pop_responses() {
     current_response.reset();
     break;
   }
+  case RequestTypes::SetProcessor:
   case RequestTypes::SetMicrophone: {
     auto &f = std::get<future<void>>(resp.fut);
     if (f.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
@@ -187,10 +214,23 @@ vector<json> RPCServer::pop_responses() {
     }
     break;
   }
+  case RequestTypes::GetProcessors: {
+    auto &f = std::get<future<pair<int, vector<AudioProcessor::Info>>>>(resp.fut);
+    if (f.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+      auto v = f.get();
+      vector<json> infos;
+      for (auto &info : std::get<1>(v)) {
+	infos.push_back({{"name", info.name}});
+      }
+      out.push_back(make_response(
+          resp.id, {{"list", infos}, {"cur", std::get<0>(v)}}));
+      current_response.reset();
+    }
+    break;
   }
-  default:
-    throw std::runtime_error("Unknown request enountered in handle_request");
   }
   return out;
 }
-RPCServer::RPCServer(VirtualMic *mic) { this->mic = mic; }
+RPCServer::RPCServer(VirtualMic *mic, AudioProcessorManager apm) : apm(apm) {
+  this->mic = mic;
+}

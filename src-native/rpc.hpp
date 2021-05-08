@@ -8,6 +8,7 @@
 
 #include "nlohmann/json.hpp"
 
+#include "audio_processor_manager.hpp"
 #include "virtual_mic.hpp"
 
 using json = nlohmann::json;
@@ -22,7 +23,7 @@ using std::vector;
 
 class RPCServer {
 public:
-  RPCServer(VirtualMic *mic);
+  RPCServer(VirtualMic *mic, AudioProcessorManager apm);
   void handle_request(json req);
   vector<json> pop_responses();
   void pump();
@@ -41,7 +42,9 @@ private:
     SetRemoveNoise,
     GetRemoveNoise,
     SetLoopback,
-    GetLoopback
+    GetLoopback,
+    GetProcessors,
+    SetProcessor
   };
 
   struct Request {
@@ -60,6 +63,10 @@ private:
         // SetLoopback
         bool shouldLoopback;
       };
+      struct {
+	// setProcessor
+	int apId;
+      };
     };
   };
 
@@ -67,10 +74,11 @@ private:
     enum RequestTypes type;
     string id;
     variant<future<bool>, future<pair<int, vector<pair<int, string>>>>,
-            future<void>>
+            future<void>, future<pair<int, vector<AudioProcessor::Info>>>>
         fut;
   };
   VirtualMic *mic;
+  AudioProcessorManager apm;
   vector<Request> request_queue;
   optional<Response> current_response;
 

@@ -25,16 +25,27 @@ using std::stringstream;
 // little more cpp imo
 
 PipeSourceVirtualMic::PipeSourceVirtualMic(
-    AudioProcessor *denoiser, std::shared_ptr<spdlog::logger> logger)
-    : denoiser(), logger(logger), pipesource_module_idx(-1),
-      module_load_operation(nullptr), state(InitContext),
-      pb_state(PlaybackState::StreamEmpty), cur_act() {
+    AudioProcessor *ap, std::shared_ptr<spdlog::logger> logger)
+    : logger(logger), pipesource_module_idx(-1),
+      module_operation(nullptr), state(InitContext),
+      pb_state(PlaybackState::StreamEmpty), cur_act(), VirtualMic(ap), ring_buf(buffer_length) {
   logger->trace("Init PipeSourceVirtualMic");
 
-  this->denoiser = denoiser;
   shared_sample_spec.channels = 1;
-  shared_sample_spec.rate = denoiser->get_sample_rate();
-  switch (denoiser->get_audio_format()) {
+  update_sample_spec();
+
+  should_run = true;
+
+  mainloop = shared_ptr<pa_mainloop>(pa_mainloop_new(), pa_mainloop_free);
+  connect();
+
+  exception_promise = promise<std::exception_ptr>();
+  async_thread = thread(&PipeSourceVirtualMic::run, this);
+}
+
+void PipeSourceVirtualMic::update_sample_spec() {
+  shared_sample_spec.rate = ap->get_sample_rate();
+  switch (ap->get_audio_format()) {
   case AudioFormat::FLOAT32_LE:
     shared_sample_spec.format = PA_SAMPLE_FLOAT32;
     format_module = "float32";
@@ -44,18 +55,19 @@ PipeSourceVirtualMic::PipeSourceVirtualMic(
     format_module = "s16ne";
     break;
   }
+}
 
-  buffer = new uint8_t[buffer_length];
-  write_idx = 0;
-  read_idx = 0;
+void PipeSourceVirtualMic::setAudioProcessor(AudioProcessor *ap) {
+  lock_guard<mutex> lock(mainloop_mutex);
+  this->ap = ap;
+  update_sample_spec();
 
-  should_run = true;
-
-  mainloop = shared_ptr<pa_mainloop>(pa_mainloop_new(), pa_mainloop_free);
-  connect();
-
-  exception_promise = promise<std::exception_ptr>();
-  async_thread = thread(&PipeSourceVirtualMic::run, this);
+  changeState(UnloadModule);
+  if (pb_state == Loopback) {
+    pb_state = InitStream;
+  } else {
+    pb_state = StreamEmpty;
+  }
 }
 
 void PipeSourceVirtualMic::changeState(State s) {
@@ -83,19 +95,13 @@ void PipeSourceVirtualMic::connect() {
 
 void PipeSourceVirtualMic::run() {
   int err;
-  bool swapped_file = false;
 
   try {
     while (should_run) {
-      std::size_t willspew;
-      {
-        lock_guard<mutex> lock(mainloop_mutex);
-        willspew = denoiser->willspew();
-      }
       // block when we won't spew
       if ((err = pa_mainloop_iterate(
                mainloop.get(),
-               state == Denoise && (0 == willspew || write_idx != read_idx),
+               state == Denoise && (ring_buf.size() < ap->get_chunk_size()),
                NULL)) < 0) {
         stringstream ss;
         ss << "pa_mainloop_iterate: " << pa_strerror(err);
@@ -135,26 +141,13 @@ void PipeSourceVirtualMic::run() {
         poll_recording_stream();
         break;
       case Denoise:
-        if (denoiser->get_buffer_size() > max_denoiser_buffer) {
-          logger->trace("Cutting buffer from {} to {}",
-                        denoiser->get_buffer_size(), max_denoiser_buffer / 2);
-          denoiser->drop_samples(denoiser->get_buffer_size() -
-                                 max_denoiser_buffer / 2);
-        }
         check_mic_active();
         // If nothing is listening
-        if (pb_state != Loopback && virtmic_source_state != PA_SOURCE_RUNNING) {
-          // Don't waste cpu
-          denoiser->set_should_denoise(false);
-        } else {
-          denoiser->set_should_denoise(should_denoise);
-          // If we're just getting back, clear the buffer of old stuff that no
-          // one needs to hear
-          // denoiser->drop_samples(denoiser->get_buffer_size());
-        }
         poll_recording_stream();
         write_to_outputs();
         break;
+      case UnloadModule:
+	unload_module();
       }
       switch (cur_act.action) {
       case CurrentAction::GetMicrophones:
@@ -185,7 +178,7 @@ void PipeSourceVirtualMic::run() {
   }
 }
 void PipeSourceVirtualMic::check_module_loaded() {
-  module_load_operation =
+  module_operation =
       pa_context_get_source_info_list(ctx.get(), source_info_cb, this);
   changeState(WaitCheckModuleLoaded);
 }
@@ -275,63 +268,47 @@ void PipeSourceVirtualMic::get_microphones() {
   }
 }
 void PipeSourceVirtualMic::write_to_outputs() {
-  size_t spew_size;
-  // logger->trace("Write, read: {}, {}", write_idx, read_idx);
-  if ((spew_size = denoiser->willspew())) {
-    spew_size = spew_size > buffer_length ? buffer_length : spew_size;
-    size_t spewed;
-    if (spew_size > buffer_length - write_idx) {
-      uint8_t *temp_buffer = new uint8_t[spew_size];
-      spewed = denoiser->spew(temp_buffer, spew_size);
-      assert(spewed == spew_size);
-
-      if (pb_state == PlaybackState::Loopback) {
-        pa_stream_write(pb_stream.get(), temp_buffer, spewed, nullptr, 0,
-                        PA_SEEK_RELATIVE);
+  uint8_t proc_buf[buffer_length];
+  size_t processed = 0;
+  if (pb_state != Loopback && virtmic_source_state != PA_SOURCE_RUNNING || !requested_should_denoise) {
+    // Don't waste cpu
+    processed = ring_buf.size();
+    std::copy(ring_buf.begin(), ring_buf.end(), proc_buf);
+    ring_buf.clear();
+  } else {
+    uint8_t continuous_buf[ap->get_chunk_size()];
+    while (ring_buf.size() >= ap->get_chunk_size()) {
+      auto begin = ring_buf.begin();
+      auto end = ring_buf.begin() + ap->get_chunk_size();
+      std::copy(begin, end, continuous_buf);
+      ap->process(continuous_buf, proc_buf + processed);
+      ring_buf.erase_begin(ap->get_chunk_size());
+      processed += ap->get_chunk_size();
+    }
+  }
+  if (pb_state == PlaybackState::Loopback) {
+    pa_stream_write(pb_stream.get(), proc_buf, processed, nullptr, 0,
+                    PA_SEEK_RELATIVE);
+  }
+  // Let's hope that the playback buffer is long enough because maintaining a
+  // seperate buffer seems annoying
+  ssize_t written = 0;
+  ssize_t res = 0;
+  while (written < processed && res != -1) {
+    res = write(pipe_fd, proc_buf + written, processed - written);
+    if (res == -1) {
+      switch (errno) {
+      case EINTR:
+      case EAGAIN:
+	break;
+      default:
+	stringstream ss;
+	ss << "pa_mainloop_iterate, write: " << strerror(errno);
+	throw std::runtime_error(ss.str());
       }
-
-      size_t remaining_size = buffer_length - write_idx;
-      std::copy(temp_buffer, temp_buffer + remaining_size, buffer + write_idx);
-      std::copy(temp_buffer + remaining_size, temp_buffer + spew_size, buffer);
-      write_idx = spew_size - remaining_size;
-      delete[] temp_buffer;
     } else {
-      spewed = denoiser->spew(buffer + write_idx, buffer_length - write_idx);
-      if (pb_state == PlaybackState::Loopback) {
-        pa_stream_write(pb_stream.get(), buffer + write_idx, spewed, nullptr, 0,
-                        PA_SEEK_RELATIVE);
-      }
-      write_idx = (write_idx + spewed) % buffer_length;
+      written += res;
     }
-
-    // Let's hope that the playback buffer is long enough because maintaining a
-    // seperate buffer seems annoying
-  }
-  size_t to_write;
-  if (read_idx > write_idx) {
-    to_write = buffer_length - read_idx;
-  } else if (write_idx > read_idx) {
-    to_write = write_idx - read_idx;
-  } else {
-    return;
-  }
-  // Let's just make sure that to_write is a multiple of float just to be safe
-  // with alignment stuff. Not sure if it matters here, but just being safe
-  ssize_t written =
-      write(pipe_fd, buffer + read_idx, to_write - (to_write % sizeof(float)));
-  if (written == -1) {
-    switch (errno) {
-    case EINTR:
-    case EAGAIN:
-      break;
-    default:
-      stringstream ss;
-      ss << "pa_mainloop_iterate, write: " << strerror(errno);
-      throw std::runtime_error(ss.str());
-    }
-  } else {
-    // logger->trace("written: {}", written);
-    read_idx = (written + read_idx) % buffer_length;
   }
 }
 void PipeSourceVirtualMic::poll_context() {
@@ -359,14 +336,14 @@ void PipeSourceVirtualMic::poll_context() {
 }
 
 void PipeSourceVirtualMic::poll_operation() {
-  assert(module_load_operation);
+  assert(module_operation);
 
-  switch (pa_operation_get_state(module_load_operation)) {
+  switch (pa_operation_get_state(module_operation)) {
   case PA_OPERATION_CANCELLED:
     throw std::runtime_error("module_load_operation cancelled!");
   case PA_OPERATION_DONE:
-    pa_operation_unref(module_load_operation);
-    module_load_operation = nullptr;
+    pa_operation_unref(module_operation);
+    module_operation = nullptr;
     if (-1 == pipesource_module_idx && state == WaitModuleReady) {
       throw std::runtime_error("Failed to load module-pipesource");
     } else if (pipesource_module_idx == -1) {
@@ -383,7 +360,7 @@ void PipeSourceVirtualMic::poll_operation() {
         throw std::runtime_error(ss.str());
       }
     }
-  default:
+  case PA_OPERATION_RUNNING:
     break;
   }
 }
@@ -399,7 +376,7 @@ void PipeSourceVirtualMic::load_pipesource_module() {
      << "channels=1 "
      << "source_properties=\"device.description='Magic Mic'\"",
 
-      module_load_operation = pa_context_load_module(
+      module_operation = pa_context_load_module(
           ctx.get(), "module-pipe-source", ss.str().c_str(),
           PipeSourceVirtualMic::index_cb, this);
   changeState(WaitModuleReady);
@@ -407,7 +384,7 @@ void PipeSourceVirtualMic::load_pipesource_module() {
 
 void PipeSourceVirtualMic::index_cb(pa_context *c, unsigned int idx, void *u) {
   PipeSourceVirtualMic *m = (PipeSourceVirtualMic *)u;
-  m->logger->debug("Module loaded, idx={}", idx);
+  m->logger->debug("Module index: {}", (int)idx);
   m->pipesource_module_idx = idx;
 }
 void PipeSourceVirtualMic::start_pb_stream() {
@@ -446,7 +423,7 @@ void PipeSourceVirtualMic::start_recording_stream() {
       .tlength = (uint32_t)-1,
       .prebuf = (uint32_t)-1,
       .minreq = (uint32_t)-1,
-      .fragsize = (uint32_t)buffer_length,
+      .fragsize = (uint32_t)buffer_length/4,
   };
   int err = pa_stream_connect_record(rec_stream.get(), source, &attr,
                                      (pa_stream_flags)PA_STREAM_ADJUST_LATENCY);
@@ -494,9 +471,8 @@ void PipeSourceVirtualMic::poll_recording_stream() {
       }
     }
     size_t readable_size = pa_stream_readable_size(rec_stream.get());
-    if (readable_size > max_read_stream_buffer) {
-      should_denoise = false;
-      denoiser->set_should_denoise(should_denoise);
+    if (readable_size > max_read_stream_buffer && requested_should_denoise) {
+      requested_should_denoise = false;
       {
         std::lock_guard<mutex> lg(updates_mutex);
         updates.push({
@@ -505,7 +481,7 @@ void PipeSourceVirtualMic::poll_recording_stream() {
         });
       }
     }
-    if (readable_size > 0) {
+    while (readable_size > 0) {
       const void *data;
       size_t nbytes;
       int err = pa_stream_peek(rec_stream.get(), &data, &nbytes);
@@ -514,8 +490,12 @@ void PipeSourceVirtualMic::poll_recording_stream() {
         ss << "pa_stream_peak: " << pa_strerror(err);
         throw std::runtime_error(ss.str());
       }
-      denoiser->feed((uint8_t *)data, nbytes);
+      if (nbytes + ring_buf.size() > ring_buf.capacity()) {
+	break;
+      }
+      ring_buf.insert(ring_buf.end(), (uint8_t *)data, (uint8_t *)data  + nbytes);
       pa_stream_drop(rec_stream.get());
+      readable_size -= nbytes;
     }
     break;
   }
@@ -536,8 +516,26 @@ void PipeSourceVirtualMic::free_pa_stream(pa_stream *s) {
   pa_stream_disconnect(s);
   pa_stream_unref(s);
 }
+void PipeSourceVirtualMic::unload_module() {
+  if (module_operation) {
+    switch(pa_operation_get_state(module_operation)) {
+    case PA_OPERATION_CANCELLED:
+      throw std::runtime_error("module_load_operation cancelled!");
+    case PA_OPERATION_RUNNING:
+      break;
+    case PA_OPERATION_DONE:
+      pipesource_module_idx = -1;
+      pa_operation_unref(module_operation);
+      module_operation = nullptr;
+      changeState(InitCheckModuleLoaded);
+      break;
+    }
+  } else {
+    module_operation = pa_context_unload_module(
+        ctx.get(), pipesource_module_idx, nullptr, nullptr);
+  }
+}
 PipeSourceVirtualMic::~PipeSourceVirtualMic() {
-  // TODO err is pretty ugly in here. shoudl fix that
   int err = 0;
 
   if (pipe_fd) {
@@ -547,7 +545,6 @@ PipeSourceVirtualMic::~PipeSourceVirtualMic() {
     logger->error("Error closing pipe_fd: {}", strerror(err));
   }
   err = 0;
-  delete[] buffer;
   if (-1 != pipesource_module_idx && ctx &&
       PA_CONTEXT_READY == pa_context_get_state(ctx.get())) {
     // TODO make this use logger when I get that
@@ -653,7 +650,7 @@ future<void> PipeSourceVirtualMic::setMicrophone(int ind) {
 }
 future<void> PipeSourceVirtualMic::setRemoveNoise(bool b) {
   lock_guard<mutex> lock(mainloop_mutex);
-  should_denoise = b;
+  requested_should_denoise = b;
 
   promise<void> p;
   p.set_value();
@@ -663,8 +660,9 @@ future<bool> PipeSourceVirtualMic::getRemoveNoise() {
   lock_guard<mutex> lock(mainloop_mutex);
 
   promise<bool> p;
-  // TODO this should be something like denoiser->get_should_denoise but that isn't implemented yet
-  p.set_value(should_denoise);
+  // TODO this should be something like denoiser->get_should_denoise but that
+  // isn't implemented yet
+  p.set_value(requested_should_denoise);
   return p.get_future();
 }
 future<bool> PipeSourceVirtualMic::setLoopback(bool b) {
@@ -764,6 +762,7 @@ std::ostream &operator<<(std::ostream &out,
     PROCESS_VAL(PipeSourceVirtualMic::State::WaitRecStreamReady,
                 "WaitRecStreamReady");
     PROCESS_VAL(PipeSourceVirtualMic::State::Denoise, "Denoise");
+    PROCESS_VAL(PipeSourceVirtualMic::State::UnloadModule, "UnloadModule");
   }
 #undef PROCESS_VAL
 

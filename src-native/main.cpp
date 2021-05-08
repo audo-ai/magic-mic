@@ -9,7 +9,6 @@
 #include <utility>
 #include <vector>
 
-#include <dlfcn.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <string.h>
@@ -33,6 +32,7 @@ typedef PipeSourceVirtualMic ConcreteVirtualMic;
 #define VIRTUAL_MIC_NAME "PIPESOURCE"
 #endif
 
+#include "audio_processor_manager.hpp"
 #include "rpc.hpp"
 
 using std::pair;
@@ -131,39 +131,17 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  logger->info("Loading Audio Processor from {}", audio_processor_path);
-  void *audio_processor_lib = dlopen(audio_processor_path, RTLD_LAZY);
-  if (!audio_processor_path) {
-    logger->error("Cannot load Audio Processor: {}", dlerror());
-    return 1;
-  }
-  // reset errors
-  dlerror();
-  create_audio_processor_t *create_audio_processor =
-      (create_audio_processor_t *)dlsym(audio_processor_lib, "create");
-  const char *dlsym_error = dlerror();
-  if (dlsym_error) {
-    logger->error("Cannot load Audio Processor create symbol: {}", dlsym_error);
-    return 1;
-  }
-
-  destroy_audio_processor_t *destroy_audio_processor =
-      (destroy_audio_processor_t *)dlsym(audio_processor_lib, "destroy");
-  dlsym_error = dlerror();
-  if (dlsym_error) {
-    logger->error("Cannot load Audio Processor destroy symbol: {}",
-                  dlsym_error);
-    return 1;
-  }
-  AudioProcessor *ap = create_audio_processor();
-
   logger->info("Starting {} virtual mic", VIRTUAL_MIC_NAME);
   auto l = spdlog::stderr_color_mt("virtmic");
   l->set_level(spdlog::level::trace);
-  ConcreteVirtualMic mic(ap, l);
+
+  AudioProcessorManager apm(audio_processor_path);
+
+  ConcreteVirtualMic mic(apm.set_current(0).get(),
+                         l);
   auto err_fut = mic.get_exception_future();
 
-  RPCServer server(&mic);
+  RPCServer server(&mic, apm);
 
   stringstream ss;
   while (running) {
@@ -172,7 +150,7 @@ int main(int argc, char **argv) {
       try {
         std::rethrow_exception(err_fut.get());
       } catch (const std::exception &e) {
-        logger->error("Virtual Mic through exception \"{}\"", e.what());
+        logger->error("Virtual Mic threw exception \"{}\"", e.what());
         break;
       }
     }
@@ -320,9 +298,6 @@ int main(int argc, char **argv) {
   }
 
   mic.stop();
-
-  destroy_audio_processor(ap);
-  dlclose(audio_processor_lib);
 
   return 0;
 }

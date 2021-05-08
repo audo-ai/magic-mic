@@ -6,6 +6,8 @@
 #include <utility>
 #include <vector>
 
+#include "audio_processor.hpp"
+
 using std::future;
 using std::optional;
 using std::pair;
@@ -24,6 +26,8 @@ struct VirtualMicUpdate {
  */
 class VirtualMic {
 public:
+  VirtualMic(AudioProcessor *ap) : ap(ap) {};
+  virtual ~VirtualMic() {};
   virtual void stop() = 0;
   virtual void abortLastRequest() = 0;
   virtual future<bool> getStatus() = 0;
@@ -33,7 +37,11 @@ public:
   virtual future<bool> getRemoveNoise() = 0;
   virtual future<bool> setLoopback(bool) = 0;
   virtual future<bool> getLoopback() = 0;
+  virtual void setAudioProcessor(AudioProcessor *ap) = 0;
 
   virtual future<std::exception_ptr> get_exception_future() = 0;
   virtual optional<VirtualMicUpdate> get_update() = 0;
+protected:
+  AudioProcessor *ap;
+  
 };

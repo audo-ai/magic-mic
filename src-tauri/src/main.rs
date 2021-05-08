@@ -78,8 +78,15 @@ fn main() {
     runtime_lib_path.clone().into_os_string()
   );
 
+  let mut preload_lib_path = runtime_lib_path.clone();
+  preload_lib_path.push("preload");
+  info!(
+    "preload lib path: {:?}",
+    preload_lib_path.clone().into_os_string()
+  );
+
   let mut audio_processor_path = runtime_lib_path.clone();
-  audio_processor_path.push("audioproc.so");
+  audio_processor_path.push("audioprocs");
   info!(
     "audio processor path: {:?}",
     audio_processor_path.clone().into_os_string()
@@ -100,7 +107,7 @@ fn main() {
     Err(e) => {
       info!("Starting new server; error was: {}", e);
       Command::new(server_path)
-        .env("LD_LIBRARY_PATH", runtime_lib_path.into_os_string())
+        .env("LD_LIBRARY_PATH", preload_lib_path.into_os_string())
         .arg(sock_path.clone().into_os_string())
         .arg(icon_path.into_os_string())
         .arg(exe_path.clone().into_os_string())

@@ -27,6 +27,8 @@ pub enum ServerCmd {
   SetShouldRemoveNoise { value: bool },
   SetMicrophone { value: i32 },
   GetMicrophones,
+  GetProcessors,
+  SetProcessor { value: i32 },
 }
 #[derive(Deserialize)]
 #[serde(tag = "cmd", rename_all = "camelCase")]

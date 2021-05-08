@@ -41,3 +41,15 @@ No return value.
 
 ### `setLoopback`
 starts/stops loopback. Takes a bool corresponding to whether or not to start the loopback.
+
+### `getProcessors`
+Returns a list of audio processor options
+```json
+"list": [
+	"name": string
+],
+"cur": int index in list of current
+```
+### `setProcessor`
+Takes an int index of the processor to set.
+

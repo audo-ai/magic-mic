@@ -1,7 +1,71 @@
 cmake_minimum_required(VERSION 3.10)
 
+#[[
+Howdy, here's the low down on the build system:
+
+Ultimately we are trying to build an as self contained as possible desktop app bundled inside of an appimage (we're only supporting linux anyways right now). Additionally, we want to support a module system that allows audio processors to be shipped with the app and used on the fly. These two constraints are what have dictated the structure of the build system the most.
+
+Building the desktop app:
+    Static linking as much as possible would be ideal for this situation, but it is
+    often hard to get or build the static versions of libraries and get everything
+    to play nicely. So, in those cases we just ship the shared library and
+    LD_PRELOAD it. To add a shared library that should be shipped with a target, the
+    `BUNDLED_LIBS` property is set on the target with the name of the library (as it
+    would appear in eg. ldd). This is then passed to our `get_shared_libraries`
+    script which parses ldd output and copies over the library to a local directory
+    to be bundled later. I recently learned that cmake seems to keep track of all of
+    these libraries so it may be possible to use a `$<TARGET_FILE:>` query or
+    something to just get the local file from cmake. That would be nice to not
+    rely on the shotty script I wrote.
+
+    TODO: See if we can replace `get_shared_libraries` with `$<TARGET_FILE:>` or something
+
+    The actual app bundling is done by tauri. The tauri config is where all of
+    the things you want to bundle with your app are listed, so what we do is
+    create a `native` directory tree in the `src-tauri` tree so that the tauri
+    bundler can reference all our native stuff. Right now we create a tree like
+    ./src-tauri/native/
+    ├── runtime_libs
+    │   ├── audioprocs
+    │   │   └── librnnoise-audioproc.so
+    │   └── preload
+    │       ├── libnotifymm-1.0.so.7
+    │       ├── libnotify.so.4
+    │       └── librnnoise.so.0
+    └── server-x86_64-unknown-linux-gnu
+
+    where the audioproc libs are in audioprocs and the library deps are in
+    preload. Tauri then handles the rest of the bundling into an appimage and
+    stuff. Also, tauri expects exes to have the triplet suffix, so we add that
+    to our server exe. If we ever add platforms, this is going to need a lot
+    more thought.
+
+Distributing Modules:
+    The way we distribute an arbitrary number of modules is that every module
+    just appends its target to the `AUDIOPROCS` variable using the
+    `append_audioproc` function. The target can also have the `BUNDLED_LIBS`
+    variable set. We then iterate over this list creating a
+    `bundle_tauri-target` target for each target which copies over its bundled
+    libs and copies the library to the audioprocs lib. We make all of these
+    dependencies of the main `bundle_tauri` target. Note: This all works because
+    it seems like pretty much everything in cmake is just a string. Even though
+    it sort of seems like targets are these speacial objects, they're really
+    just strings and the speacial stuff is just dictionary lookup to find the
+    object somewhere else (these are all black box guesses, not confident about
+    any of this). This means we can just create lists of strings representing
+    targets and they will resolve to the right thing when used in functions or
+    generator expressions or whatever. Also, note a useful way to debug target
+    dependency stuff (and also just a nice thing to know is available) is
+    running `cmake --graphviz=graph.dot ...`. This gives you dep graph, but
+    you'll probably need to modify the output so just check
+    https://cmake.org/cmake/help/latest/module/CMakeGraphVizOptions.html. You
+    don't just modify the variables, you have to create a new file.
+# ]]
+
 # set the project name
 project(magic-mic)
+
+set(CMAKE_CXX_FLAGS "-Wall")
 
 # Dependencies
 include(FindPkgConfig) # For libnotifymm
@@ -48,6 +112,15 @@ if(NOT tray_POPULATED)
   add_subdirectory(${tray_SOURCE_DIR} ${tray_BINARY_DIR})
 endif()
 
+set(AUDIOPROCS)
+macro(append_audioproc target)
+  list(APPEND AUDIOPROCS ${target})
+  set(AUDIOPROCS ${AUDIOPROCS})
+  set(AUDIOPROCS
+      ${AUDIOPROCS}
+      PARENT_SCOPE)
+endmacro()
+
 add_subdirectory(src-native)
 
 file(GLOB_RECURSE ALL_CODE_FILES ${PROJECT_SOURCE_DIR}/src-native/*.[ch]pp)
@@ -59,27 +132,47 @@ if(${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
   set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -s")
   set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -s")
 
-  set(MAIN_LIBS_TO_COPY "libnotifymm,libnotify")
-  if (${AUDIO_PROCESSOR_USE_RNNOISE})
-    set(AUDIOPROC_LIBS_TO_COPY "librnnoise")
-  else()
-    set(AUDIOPROC_LIBS_TO_COPY "")
-  endif()
+  get_target_property(MAIN_LIBS_TO_COPY server BUNDLED_LIBS)
 
   set_target_properties(server PROPERTIES SUFFIX "-x86_64-unknown-linux-gnu")
   add_custom_target(
-    bundle_tauri ALL
-    COMMAND ${CMAKE_COMMAND} -E make_directory "runtime_libs"
+    bundle_tauri_init ALL
     COMMAND ${CMAKE_COMMAND} -E rm -Rf
             "${CMAKE_CURRENT_SOURCE_DIR}/src-tauri/native/runtime_libs"
-    COMMAND ../scripts/get_shared_library_deps.sh $<TARGET_FILE:server>
-            "runtime_libs" "${MAIN_LIBS_TO_COPY}"
-    COMMAND ../scripts/get_shared_library_deps.sh $<TARGET_FILE:audioproc>
-            "runtime_libs" "${AUDIOPROC_LIBS_TO_COPY}"
-    COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:audioproc>"
-            "${CMAKE_CURRENT_BINARY_DIR}/runtime_libs/audioproc.so"
-    DEPENDS audioproc server
+    COMMAND ${CMAKE_COMMAND} -E make_directory "runtime_libs"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "runtime_libs/preload"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "runtime_libs/audioprocs"
     BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/runtime_libs")
+
+  set(AUDIOPROC_BUNDLE_TARGETS)
+  foreach(AUDIOPROC ${AUDIOPROCS})
+    message(STATUS "Processing Audio Processor \"${AUDIOPROC}\"")
+    get_property(LIBS_TO_COPY_DEFD TARGET ${AUDIOPROC} PROPERTY BUNDLED_LIBS DEFINED)
+    if (${LIBS_TO_COPY_DEFD})
+      get_target_property(LIBS_TO_COPY "${AUDIOPROC}" BUNDLED_LIBS)
+    else()
+      set(LIBS_TO_COPY "")
+    endif()
+    add_custom_target(
+      bundle_tauri_${AUDIOPROC}
+      COMMAND
+        ../scripts/get_shared_library_deps.sh "$<TARGET_FILE:${AUDIOPROC}>"
+        "runtime_libs/preload" "${LIBS_TO_COPY}"
+      COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:${AUDIOPROC}>"
+              "${CMAKE_CURRENT_BINARY_DIR}/runtime_libs/audioprocs"
+      DEPENDS bundle_tauri_init ${AUDIOPROC})
+    list(APPEND AUDIOPROC_BUNDLE_TARGETS "bundle_tauri_${AUDIOPROC}")
+  endforeach()
+
+  add_custom_target(
+    bundle_tauri_server
+    COMMAND ../scripts/get_shared_library_deps.sh $<TARGET_FILE:server>
+            "runtime_libs/preload" "${MAIN_LIBS_TO_COPY}"
+    DEPENDS server bundle_tauri_init)
+
+  add_custom_target(bundle_tauri ALL DEPENDS bundle_tauri_server
+                                             ${AUDIOPROC_BUNDLE_TARGETS})
+
   add_custom_target(
     install_tauri
     DEPENDS bundle_tauri

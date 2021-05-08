@@ -31,7 +31,7 @@ const INFO = 2;
 const TRACE = 3;
 const WARN = 4;
 const log = (msg, level) => {
-  invoke(makeLocalCmd({ cmd: "log", msg, level }));
+  //invoke(makeLocalCmd({ cmd: "log", msg, level }));
 };
 
 const SelectWithImage = ({ options, image, chosen, setChosen }) => {
@@ -129,6 +129,8 @@ const DeviceSelector = ({ title, current, icon, devices, switchToDevice }) => {
 const App = () => {
   const [devices, setDevices] = useState([]);
   const [curDevice, setCurrentDevice] = useState();
+  const [procs, setProcs] = useState([]);
+  const [curProc, setCurProc] = useState();
   const [loopback, setLoopback] = useState(null);
   const [status, setStatus] = useState("Waiting");
   useEffect(() => {
@@ -202,12 +204,54 @@ const App = () => {
         .catch((v) => log(`setLoopback error: "${JSON.stringify(v)}"`, ERROR));
     }
   }, [loopback, devices]);
+  useEffect(() => {
+    let cb = () => {
+      promisified(makeExternalCmd({ cmd: "getProcessors" }))
+        .then((v) => {
+          setProcs(v["list"]);
+          setCurProc(v["cur"]);
+          log(`getAudioProcessors response: "${JSON.stringify(v)}"`, TRACE);
+        })
+        .catch((v) =>
+          log(`getAudioProcessors error: "${JSON.stringify(v)}"`, ERROR)
+        );
+    };
+    cb();
+    let int = setInterval(cb, 5000);
+    return () => clearInterval(int);
+  }, []);
+  useEffect(() => {
+    // TODO: Handle errors
+    if (loopback === null) {
+      return;
+    }
+    if (devices.length > 0) {
+      promisified(makeExternalCmd({ cmd: "setLoopback", value: loopback }))
+        .then((v) => log(`setLoopback response: "${JSON.stringify(v)}"`, TRACE))
+        .catch((v) => log(`setLoopback error: "${JSON.stringify(v)}"`, ERROR));
+    }
+  }, [loopback, devices]);
 
   switch (status) {
     case "Good":
       return (
         <div id="main-container">
           <img id="logo" src={logo} />
+	  <h1 style={{"color":"white"}}> {curProc} </h1>
+          <DeviceSelector
+            title="Audio Processor"
+            current={curProc}
+            icon={mic}
+            devices={procs.map((i, j) => { return {...i, id:j}})}
+            switchToDevice={(v) =>
+              promisified(
+                makeExternalCmd({
+                  cmd: "setProcessor",
+                  value: v,
+                })
+              )
+            }
+          />
           <DeviceSelector
             title="Microphone"
             current={curDevice}

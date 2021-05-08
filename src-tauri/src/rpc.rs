@@ -31,7 +31,7 @@ fn get_status() -> JSONRpcReq {
   JSONRpcReq {
     jsonrpc: "2.0".to_string(),
     method: "getStatus".to_string(),
-    id: get_id(), // TODO make this random
+    id: get_id(), 
     params: None,
   }
 }
@@ -39,7 +39,7 @@ fn set_should_remove_noise(b: bool) -> JSONRpcReq {
   JSONRpcReq {
     jsonrpc: "2.0".to_string(),
     method: "setRemoveNoise".to_string(),
-    id: get_id(), // TODO make this random
+    id: get_id(), 
     params: Some(serde_json::Value::Bool(b)),
   }
 }
@@ -47,7 +47,7 @@ fn get_microphones() -> JSONRpcReq {
   JSONRpcReq {
     jsonrpc: "2.0".to_string(),
     method: "getMicrophones".to_string(),
-    id: get_id(), // TODO make this random
+    id: get_id(), 
     params: None,
   }
 }
@@ -55,7 +55,7 @@ fn set_microphones(ind: i32) -> JSONRpcReq {
   JSONRpcReq {
     jsonrpc: "2.0".to_string(),
     method: "setMicrophone".to_string(),
-    id: get_id(), // TODO make this random
+    id: get_id(), 
     params: Some(serde_json::Value::Number(serde_json::Number::from(ind))),
   }
 }
@@ -63,7 +63,7 @@ fn get_remove_noise() -> JSONRpcReq {
   JSONRpcReq {
     jsonrpc: "2.0".to_string(),
     method: "getRemoveNoise".to_string(),
-    id: get_id(), // TODO make this random
+    id: get_id(), 
     params: None,
   }
 }
@@ -71,7 +71,7 @@ fn get_loopback() -> JSONRpcReq {
   JSONRpcReq {
     jsonrpc: "2.0".to_string(),
     method: "getLoopback".to_string(),
-    id: get_id(), // TODO make this random
+    id: get_id(), 
     params: None,
   }
 }
@@ -79,12 +79,27 @@ fn set_loopback(b: bool) -> JSONRpcReq {
   JSONRpcReq {
     jsonrpc: "2.0".to_string(),
     method: "setLoopback".to_string(),
-    id: get_id(), // TODO make this random
+    id: get_id(), 
     //params: Some(serde_json::Value::Bool(serde_json::Bool::from(b)))
     params: Some(serde_json::Value::Bool(b.into())),
   }
 }
-
+fn get_audio_processors() -> JSONRpcReq {
+  JSONRpcReq {
+    jsonrpc: "2.0".to_string(),
+    method: "getProcessors".to_string(),
+    id: get_id(), 
+    params: None,
+  }
+}
+fn set_audio_processor(ind: i32) -> JSONRpcReq {
+  JSONRpcReq {
+    jsonrpc: "2.0".to_string(),
+    method: "setProcessor".to_string(),
+    id: get_id(),
+    params: Some(serde_json::Value::Number(serde_json::Number::from(ind))),
+  }
+}
 fn dispatch_and_execute<R: serde::Serialize + Send + 'static>(
   _webview: &mut tauri::WebviewMut,
   mess: R,
@@ -107,6 +122,8 @@ fn get_rpc_req(event: ServerCmd) -> JSONRpcReq {
     ServerCmd::SetMicrophone { value } => set_microphones(value),
     ServerCmd::GetLoopback { } => get_loopback(),
     ServerCmd::GetRemoveNoise { } => get_remove_noise(),
+    ServerCmd::GetProcessors { } => get_audio_processors(),
+    ServerCmd::SetProcessor { value } => set_audio_processor(value),
   }
 }
 fn try_read_to_newline(server: &mut UnixStream, buf: &mut String) {
@@ -145,7 +162,11 @@ pub fn server_thread(
     let res: serde_json::Result<JSONRpcResp> = serde_json::from_str(&buf);
     match res {
       Ok(resp) => {
-        buf.clear();
+	trace!(
+	  "Server response: \"{}\"",
+	  serde_json::to_string_pretty(&resp).unwrap()
+	);
+	buf.clear();
         match reqs.get_mut(&resp.id) {
           Some((_webview, callback, error)) => {
             dispatch_and_execute(

@@ -1,4 +1,6 @@
 /* The switch - the box around the slider */
+$slide-color: #f4464a;
+
 .switch {
   position: relative;
   display: inline-block;
@@ -21,7 +23,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: lighten(#f05742, 25%);
+  background-color: lighten($slide-color, 25%);
   transition: 0.4s;
   height: 15px;
   width: 50px;
@@ -34,17 +36,17 @@
   width: 26px;
   left: 0px;
   top: -6px;
-  background-color: #f05742;
+  background-color: $slide-color;
   transition: 0.4s;
 }
 
 input:checked + .slider {
   //background-color: #2196F3;
-  background-color: lighten(#f05742, 10%);
+  background-color: lighten($slide-color, 10%);
 }
 
 input:focus + .slider {
-  box-shadow: 0 0 1px #f05742;
+  box-shadow: 0 0 1px $slide-color;
 }
 
 input:checked + .slider:before {

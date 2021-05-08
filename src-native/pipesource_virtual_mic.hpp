@@ -15,6 +15,7 @@
 
 #include <spdlog/sinks/null_sink.h>
 #include <spdlog/spdlog.h>
+#include <boost/circular_buffer.hpp>
 
 #include "audio_processor.hpp"
 #include "virtual_mic.hpp"
@@ -31,6 +32,7 @@ using std::shared_ptr;
 using std::string;
 using std::thread;
 using std::vector;
+using boost::circular_buffer;
 
 class PipeSourceVirtualMic;
 // Only supports a single instance
@@ -52,6 +54,7 @@ public:
   future<bool> getRemoveNoise() override;
   future<bool> setLoopback(bool) override;
   future<bool> getLoopback() override;
+  void setAudioProcessor(AudioProcessor *ap) override;
   future<std::exception_ptr> get_exception_future() override {
     return exception_promise.get_future();
   };
@@ -115,7 +118,8 @@ private:
     GetDefaultSource,
     InitRecStream,
     WaitRecStreamReady,
-    Denoise
+    Denoise,
+    UnloadModule
   };
   friend std::ostream &operator<<(std::ostream &out,
                                   const PipeSourceVirtualMic::State value);
@@ -133,7 +137,7 @@ private:
   const char *source = nullptr;
   const char *client_name = "Client Name";
   const int target_latency = 0;
-  const size_t buffer_length = 1600;
+  const size_t buffer_length = 3200;
   const size_t max_denoiser_buffer = 16000;
   const size_t max_read_stream_buffer = 16000;
   pa_sample_spec shared_sample_spec;
@@ -145,9 +149,7 @@ private:
   int pipe_fd;
 
   // TODO: factor this out into a tiny ring buffer
-  uint8_t *buffer;
-  size_t write_idx;
-  size_t read_idx;
+  circular_buffer<uint8_t> ring_buf;
 
   // TODO: I don't think we should allow mainloop to be freed before ctx
   // and rec_stream but, I can't figure out a good way to fix that
@@ -157,7 +159,8 @@ private:
   atomic<bool> should_run;
 
   int pipesource_module_idx;
-  pa_operation *module_load_operation;
+  int pipesource_idx;
+  pa_operation *module_operation;
 
   // The playback stream is sort of unrelated to all the other stuff. It should
   // only be inited after everything else is inited, but It shouldn't be inited
@@ -187,11 +190,11 @@ private:
 
   pa_operation *get_default_source_op = nullptr;
 
-  bool should_denoise = false;
-
-  AudioProcessor *denoiser;
+  bool requested_should_denoise = false;
 
   mutex mainloop_mutex;
+  void unload_module();
+  void update_sample_spec();
   void run();
   void connect();
   void run_mainloop();
