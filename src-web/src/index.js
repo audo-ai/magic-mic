@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import ReactDOM from "react-dom";
 
 import { invoke, promisified } from "tauri/api/tauri";
@@ -125,12 +125,107 @@ const DeviceSelector = ({ title, current, icon, devices, switchToDevice }) => {
     </div>
   );
 };
+const Options = () => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [procs, setProcs] = useState([]);
+  const [curProc, setCurProc] = useState();
+  const boxRef = useRef(null);
+  const optionsRef = useRef(null);
 
+  useEffect(() => {
+    let cb = () => {
+      promisified(makeExternalCmd({ cmd: "getProcessors" }))
+        .then((v) => {
+          setProcs(v["list"]);
+          setCurProc(v["cur"]);
+          log(`getAudioProcessors response: "${JSON.stringify(v)}"`, TRACE);
+        })
+        .catch((v) =>
+          log(`getAudioProcessors error: "${JSON.stringify(v)}"`, ERROR)
+        );
+    };
+    cb();
+    let int = setInterval(cb, 5000);
+    return () => clearInterval(int);
+  }, []);
+  const setProcessor = (id) => {
+    if (id !== curProc) {
+      promisified(makeExternalCmd({ cmd: "setProcessor", value: id }))
+        .then((v) => {
+          log(`setProcessor response: "${JSON.stringify(v)}"`, TRACE);
+        })
+        .catch((v) => log(`setProcessor error: "${JSON.stringify(v)}"`, ERROR));
+      setCurProc(id);
+    }
+  };
+  useEffect(() => {
+    const docClick = (e) => {
+      if (
+        isOpen &&
+        boxRef &&
+        boxRef.current &&
+        !boxRef.current.contains(e.target) &&
+        optionsRef &&
+        optionsRef.current &&
+        !optionsRef.current.contains(e.target)
+      ) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", docClick);
+    return () => {
+      document.removeEventListener("mousedown", docClick);
+    };
+  }, [boxRef, isOpen, setIsOpen]);
+
+  return (
+    <>
+      <div
+        ref={optionsRef}
+        id="options-toggle"
+        className={isOpen ? "open" : "closed"}
+        onClick={(e) => setIsOpen(!isOpen)}
+      >
+        {" "}
+      </div>
+      <div id="options" style={isOpen ? {} : { display: "none" }} ref={boxRef}>
+        <div>
+          <a onClick={() => open("https://magicmic.ai/")}> About </a>
+        </div>
+        <div>
+          <a onClick={() => open("https://github.com/audo-ai/magic-mic")}>
+            Github
+          </a>
+        </div>
+        <div>
+          <a
+            onClick={() =>
+              open("https://github.com/audo-ai/magic-mic/discussions")
+            }
+          >
+            Discussions
+          </a>
+        </div>
+        <hr />
+        <div id="model-select-prompt">Choose a noise cancellation model</div>
+        <ul>
+          {procs.map((p, i) => (
+            <li
+              onClick={() => setProcessor(i)}
+              className={i === curProc ? "selected" : ""}
+              key={p.name}
+            >
+              {p.name}
+            </li>
+          ))}
+        </ul>
+      </div>
+    </>
+  );
+};
 const App = () => {
   const [devices, setDevices] = useState([]);
   const [curDevice, setCurrentDevice] = useState();
-  const [procs, setProcs] = useState([]);
-  const [curProc, setCurProc] = useState();
   const [loopback, setLoopback] = useState(null);
   const [status, setStatus] = useState("Waiting");
   useEffect(() => {
@@ -205,22 +300,6 @@ const App = () => {
     }
   }, [loopback, devices]);
   useEffect(() => {
-    let cb = () => {
-      promisified(makeExternalCmd({ cmd: "getProcessors" }))
-        .then((v) => {
-          setProcs(v["list"]);
-          setCurProc(v["cur"]);
-          log(`getAudioProcessors response: "${JSON.stringify(v)}"`, TRACE);
-        })
-        .catch((v) =>
-          log(`getAudioProcessors error: "${JSON.stringify(v)}"`, ERROR)
-        );
-    };
-    cb();
-    let int = setInterval(cb, 5000);
-    return () => clearInterval(int);
-  }, []);
-  useEffect(() => {
     // TODO: Handle errors
     if (loopback === null) {
       return;
@@ -236,22 +315,8 @@ const App = () => {
     case "Good":
       return (
         <div id="main-container">
+          <Options />
           <img id="logo" src={logo} />
-	  <h1 style={{"color":"white"}}> {curProc} </h1>
-          <DeviceSelector
-            title="Audio Processor"
-            current={curProc}
-            icon={mic}
-            devices={procs.map((i, j) => { return {...i, id:j}})}
-            switchToDevice={(v) =>
-              promisified(
-                makeExternalCmd({
-                  cmd: "setProcessor",
-                  value: v,
-                })
-              )
-            }
-          />
           <DeviceSelector
             title="Microphone"
             current={curDevice}
@@ -272,13 +337,6 @@ const App = () => {
               {" "}
               {loopback ? "Stop" : "Mic Check"}{" "}
             </p>
-            <a
-              onClick={() => open("https://magicmic.ai/feedback")}
-              id="feedback"
-            >
-              {" "}
-              Give us your feedback!{" "}
-            </a>
           </div>
         </div>
       );

@@ -59,6 +59,100 @@ body {
       font-size: 0.8em;
     }
   }
+  #options-toggle {
+    color: white;
+    position: absolute;
+    top: 0.5rem;
+    right: 0px;
+    cursor: pointer;
+  }
+  #options-toggle:after {
+    font-size: 2rem;
+    font-family: Helvetica;
+    content: "\2807";
+  }
+  #options {
+    position: absolute;
+    top: 0.5rem;
+    right: 2rem;
+    display: flex;
+    flex-direction: column;
+    border-radius: 10px;
+    box-shadow: 5px 10px 5px black;
+    z-index: 10;
+
+    background: #2e2e2e;
+    padding: 1rem;
+
+    font-size: 1.5rem;
+    font-weight: bold;
+
+    min-width: 200px;
+    ul {
+      list-style: none;
+      margin-top: 0.5rem;
+      margin-right: 1rem;
+    }
+    li::before {
+      content: ".";
+      color: #0000;
+      border-radius: 50%;
+      position: absolute;
+      width: 1.2rem;
+      height: 1.2rem;
+      left: 1.7rem;
+      transform: translateY(0.2rem);
+    }
+    li.selected::before {
+      background: rgb(240, 87, 66);
+      background: radial-gradient(
+        circle,
+        rgba(240, 87, 66, 1) 52%,
+        rgba(246, 154, 142, 1) 52%
+      );
+    }
+    li::before {
+      background: #f69a8e;
+    }
+    li {
+      cursor: pointer;
+    }
+    a {
+      width: 0px;
+      cursor: pointer;
+      color: inherit;
+      text-decoration: underline;
+      text-decoration: none;
+      display: inline-block;
+      border-bottom: 3px solid;
+      margin-right: 39px;
+      width: 0px;
+      -webkit-transition: 0.5s ease;
+      transition: 0.5s ease;
+      text-align: center;
+    }
+    a:hover {
+      -webkit-transition: 0.5s ease;
+      transition: 0.5s ease;
+      border-bottom: 3px solid;
+      width: 90%;
+      margin-right: 9px;
+    }
+    div {
+      margin: 0.65rem;
+    }
+    hr {
+      width: 98%;
+      border: none;
+      height: 3px;
+      /* Set the hr color */
+      color: #fff; /* old IE */
+      background-color: #fff; /* Modern Browsers */
+    }
+    #model-select-prompt {
+      font-size: 0.85rem;
+    }
+  }
 }
 
 #error-container {
