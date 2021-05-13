@@ -189,22 +189,23 @@ const Options = () => {
         {" "}
       </div>
       <div id="options" style={isOpen ? {} : { display: "none" }} ref={boxRef}>
-        <div>
-          <a onClick={() => open("https://magicmic.ai/")}> About </a>
+        <div className="clickable" onClick={() => open("https://magicmic.ai/")}>
+          {" "}
+          About
         </div>
-        <div>
-          <a onClick={() => open("https://github.com/audo-ai/magic-mic")}>
-            Github
-          </a>
+        <div
+          className="clickable"
+          onClick={() => open("https://github.com/audo-ai/magic-mic")}
+        >
+          Github
         </div>
-        <div>
-          <a
-            onClick={() =>
-              open("https://github.com/audo-ai/magic-mic/discussions")
-            }
-          >
-            Discussions
-          </a>
+        <div
+          className="clickable"
+          onClick={() =>
+            open("https://github.com/audo-ai/magic-mic/discussions")
+          }
+        >
+          Discussions
         </div>
         <hr />
         <div id="model-select-prompt">Choose a noise cancellation model</div>
@@ -219,6 +220,9 @@ const Options = () => {
             </li>
           ))}
         </ul>
+        <div id="reselect-notice">
+          (You may need to reselect Magic Mic as your microphone)
+        </div>
       </div>
     </>
   );

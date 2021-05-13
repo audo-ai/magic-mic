@@ -33,7 +33,7 @@ body {
   margin: auto;
   #logo {
     padding-top: 30px;
-    width: 80%;
+    width: 75%;
   }
   #bottom {
     font-family: "AFontMedium";
@@ -117,26 +117,18 @@ body {
     li {
       cursor: pointer;
     }
-    a {
-      width: 0px;
+    div.clickable {
       cursor: pointer;
       color: inherit;
-      text-decoration: underline;
-      text-decoration: none;
-      display: inline-block;
-      border-bottom: 3px solid;
-      margin-right: 39px;
-      width: 0px;
-      -webkit-transition: 0.5s ease;
-      transition: 0.5s ease;
-      text-align: center;
+      background: inherit;
+      padding: 0.3rem;
+      margin: 0.3rem;
+      border-radius: 10px;
     }
-    a:hover {
+    div.clickable:hover {
       -webkit-transition: 0.5s ease;
-      transition: 0.5s ease;
-      border-bottom: 3px solid;
-      width: 90%;
-      margin-right: 9px;
+      transition: 0.3s ease;
+      background: lighten(#2e2e2e, 10%);
     }
     div {
       margin: 0.65rem;
@@ -149,8 +141,12 @@ body {
       color: #fff; /* old IE */
       background-color: #fff; /* Modern Browsers */
     }
-    #model-select-prompt {
+    #model-select-prompt,
+    #reselect-notice {
       font-size: 0.85rem;
+    }
+    #reselect-notice {
+      margin-top: 0px;
     }
   }
 }
