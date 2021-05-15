@@ -1,6 +1,5 @@
 # Must be run with DOCKER_BUILDKIT=1
 # syntax=docker/dockerfile:experimental
-ARG AUDIO_PROCESSOR_IMAGE=deps
 FROM ubuntu:18.04 as deps
 
 SHELL ["/bin/bash", "-c"]
@@ -46,7 +45,7 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y && \
 
 # magic-mic deps
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
-    libpulse-dev libappindicator3-dev libnotify-dev glib2.0 libgtkmm-3.0
+    libpulse-dev libappindicator3-dev libnotify-dev glib2.0 libgtkmm-3.0 libboost-dev
 RUN wget http://ftp.gnome.org/pub/gnome/sources/libnotifymm/0.7/libnotifymm-0.7.0.tar.xz && \
     tar xf libnotifymm-0.7.0.tar.xz && \
     cd libnotifymm-0.7.0 && \
@@ -83,25 +82,9 @@ RUN cd /src && \
     source $HOME/.cargo/env && \
     \. ~/.nvm/nvm.sh && nvm use 10.19 && yarn
 
-# This is pretty hacky. The src-native build either uses rnnoise or an
-# externally built shared library. We want this dockerfile to support either
-# build using build args. So, we need a way to conditionally copy an external
-# shared library if using that type of build or not if using the rnnoise
-# build. So, the best way I could come up with (its st ill really horrible) was
-# using a variable for the image to pull the dependency from. Its default is
-# deps, so if you don't set anything it will try to take the dependency from
-# this first stage of the build and if you set it to another docker image it
-# will pull from there. Then we alias that stage of the build so it can be
-# referred to elsewhere. This is probably unnecessary, but I was having a lot of
-# trouble with docker ARGs and this is what I got to work.
-RUN touch /audioproc.so
-
-FROM $AUDIO_PROCESSOR_IMAGE as audioproc
-
-FROM deps as build 
-COPY --from=audioproc /audioproc.so /audioproc.so
-
 COPY . /src
+
+FROM deps as build
 # Apparently we have to redefine this variable for it to be accessible here?
 ARG AUDIO_PROCESSOR_IMAGE
 RUN cd /src && \
@@ -109,8 +92,7 @@ RUN cd /src && \
     cd build && \
     cmake -DCMAKE_CXX_COMPILER=`which g++-10` \
 	  -DCMAKE_BUILD_TYPE=RelWithDebInfo \
-	  -DAUDIO_PROCESSOR_USE_RNNOISE=$(test "${AUDIO_PROCESSOR_IMAGE}" = "deps" && echo "ON" || echo "OFF") \
-	  -DAUDIO_PROCESSOR_MODULE=/audioproc.so \
+	  -DAUDIOPROC_CMAKES="$PWD/../src-native/RNNoiseAP.cmake" \
 	  -DVIRTMIC_ENGINE="PIPESOURCE" .. && \
     make install_tauri -j 4
 

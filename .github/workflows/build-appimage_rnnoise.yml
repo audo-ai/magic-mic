@@ -12,7 +12,7 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - name: Build AppImage
-      run: DOCKER_BUILDKIT=1 docker build . --output .
+      run: DOCKER_BUILDKIT=1 docker build . --output . -f Dockerfile.rnnoise
     - name: Rename AppImage
       id: rename-appimage
       run: |

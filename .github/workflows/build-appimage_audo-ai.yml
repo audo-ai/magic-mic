@@ -21,7 +21,7 @@ jobs:
     - name: Install image
       run: docker load -i audo-ai-denoiser-image/audo-ai-denoiser-image.tar.gz
     - name: Build AppImage
-      run: DOCKER_BUILDKIT=1 docker build --build-arg AUDIO_PROCESSOR_IMAGE=audo-ai-denoiser:latest . --output .
+      run: DOCKER_BUILDKIT=1 docker build --build-arg AUDO_LIBDENOISER_IMAGE=audo-ai-denoiser:latest . --output . -f Dockerfile.audo
     - name: Rename AppImage
       id: rename-appimage
       run: |
