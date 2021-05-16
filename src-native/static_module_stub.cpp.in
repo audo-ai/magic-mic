@@ -1,0 +1,13 @@
+#include "audio_processor.hpp"
+
+#include <dlfcn.h>
+
+extern "C" {
+
+AudioProcessor *create() {
+  create_audio_processor_t *create = (create_audio_processor_t *)dlsym(RTLD_DEFAULT, "SYMBOL_PREFIX_create");
+  return create(); }
+void destroy(AudioProcessor *ap) {
+  destroy_audio_processor_t *destroy = (destroy_audio_processor_t *)dlsym(RTLD_DEFAULT, "SYMBOL_PREFIX_destroy");
+  destroy(ap); }
+}

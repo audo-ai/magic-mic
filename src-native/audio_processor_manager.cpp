@@ -17,6 +17,7 @@ AudioProcessorManager::AudioProcessorManager(string dir) {
     if (!audio_processor_lib) {
       logger->error("Cannot load Audio Processor from {}: {}",
                     entry.path().c_str(), dlerror());
+      continue;
     }
     // reset errors
     dlerror();
@@ -26,6 +27,7 @@ AudioProcessorManager::AudioProcessorManager(string dir) {
     if (dlsym_error) {
       logger->error("Cannot load Audio Processor create symbol from {}: {}",
                     entry.path().c_str(), dlsym_error);
+      continue;
     }
 
     destroy_audio_processor_t *destroy_audio_processor =
@@ -34,6 +36,7 @@ AudioProcessorManager::AudioProcessorManager(string dir) {
     if (dlsym_error) {
       logger->error("Cannot load Audio Processor destroy symbol: {}",
                     dlsym_error);
+      continue;
     }
     AudioProcessor *ap = create_audio_processor();
     logger->info("Loaded audioprocessor from {}: {}", entry.path().c_str(),
