@@ -13,13 +13,14 @@
 
 #include <pulse/pulseaudio.h>
 
+#include <boost/circular_buffer.hpp>
 #include <spdlog/sinks/null_sink.h>
 #include <spdlog/spdlog.h>
-#include <boost/circular_buffer.hpp>
 
 #include "audio_processor.hpp"
 #include "virtual_mic.hpp"
 
+using boost::circular_buffer;
 using std::atomic;
 using std::future;
 using std::lock_guard;
@@ -32,7 +33,6 @@ using std::shared_ptr;
 using std::string;
 using std::thread;
 using std::vector;
-using boost::circular_buffer;
 
 class PipeSourceVirtualMic;
 // Only supports a single instance

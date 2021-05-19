@@ -4,8 +4,8 @@
 
 #include <dlfcn.h>
 
-#include "audio_processor_manager.hpp"
 #include "audio_processor.hpp"
+#include "audio_processor_manager.hpp"
 
 namespace fs = std::filesystem;
 

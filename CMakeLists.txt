@@ -167,28 +167,38 @@ if(${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
   set(AUDIOPROC_BUNDLE_TARGETS)
   foreach(AUDIOPROC ${AUDIOPROCS})
     message(STATUS "Processing Audio Processor \"${AUDIOPROC}\"")
-    get_property(LIBS_TO_COPY_DEFD TARGET ${AUDIOPROC} PROPERTY BUNDLED_LIBS DEFINED)
-    if (${LIBS_TO_COPY_DEFD})
+    get_property(
+      LIBS_TO_COPY_DEFD
+      TARGET ${AUDIOPROC}
+      PROPERTY BUNDLED_LIBS
+      DEFINED)
+    if(${LIBS_TO_COPY_DEFD})
       get_target_property(LIBS_TO_COPY "${AUDIOPROC}" BUNDLED_LIBS)
     else()
       set(LIBS_TO_COPY "")
     endif()
 
     get_target_property(AP_PIC "${AUDIOPROC}" POSITION_INDEPENDENT_CODE)
-    if (NOT ${AP_PIC})
+    if(NOT ${AP_PIC})
       # I think add_custom_command is appropriate here because I am generating
       # an output file that will be used as a source file for a subsequent
       # command
       get_target_property(SYMBOL_PREFIX "${AUDIOPROC}" SYMBOL_PREFIX)
-      add_custom_command(OUTPUT ${AUDIOPROC}_static_module.cpp
-	COMMAND sed --quiet "s/SYMBOL_PREFIX/${SYMBOL_PREFIX}/g; w ${AUDIOPROC}_static_module.cpp" ${CMAKE_CURRENT_SOURCE_DIR}/src-native/static_module_stub.cpp.in 
-	DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src-native/static_module_stub.cpp.in
-	VERBATIM)
+      add_custom_command(
+        OUTPUT ${AUDIOPROC}_static_module.cpp
+        COMMAND
+          sed --quiet
+          "s/SYMBOL_PREFIX/${SYMBOL_PREFIX}/g; w ${AUDIOPROC}_static_module.cpp"
+          ${CMAKE_CURRENT_SOURCE_DIR}/src-native/static_module_stub.cpp.in
+        DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src-native/static_module_stub.cpp.in
+        VERBATIM)
 
       add_library(${AUDIOPROC}_module MODULE ${AUDIOPROC}_static_module.cpp)
-      target_include_directories(${AUDIOPROC}_module PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src-native)
+      target_include_directories(${AUDIOPROC}_module
+                                 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src-native)
 
-      target_link_libraries(server -export-dynamic ${AUDIOPROC} -u${SYMBOL_PREFIX}_create)
+      target_link_libraries(server -export-dynamic ${AUDIOPROC}
+                            -u${SYMBOL_PREFIX}_create)
 
       # So that the generated shared library is bundled and not the static one
       set(AUDIOPROC ${AUDIOPROC}_module)
@@ -197,10 +207,10 @@ if(${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
     add_custom_target(
       bundle_tauri_${AUDIOPROC}
       COMMAND
-      ../scripts/get_shared_library_deps.sh "$<TARGET_FILE:${AUDIOPROC}>"
-      "runtime_libs/preload" "${LIBS_TO_COPY}"
+        ../scripts/get_shared_library_deps.sh "$<TARGET_FILE:${AUDIOPROC}>"
+        "runtime_libs/preload" "${LIBS_TO_COPY}"
       COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:${AUDIOPROC}>"
-      "${CMAKE_CURRENT_BINARY_DIR}/runtime_libs/audioprocs"
+              "${CMAKE_CURRENT_BINARY_DIR}/runtime_libs/audioprocs"
       DEPENDS bundle_tauri_init ${AUDIOPROC})
     list(APPEND AUDIOPROC_BUNDLE_TARGETS "bundle_tauri_${AUDIOPROC}")
 

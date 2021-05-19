@@ -26,9 +26,9 @@ using std::stringstream;
 
 PipeSourceVirtualMic::PipeSourceVirtualMic(
     AudioProcessor *ap, std::shared_ptr<spdlog::logger> logger)
-    : logger(logger), pipesource_module_idx(-1),
-      module_operation(nullptr), state(InitContext),
-      pb_state(PlaybackState::StreamEmpty), cur_act(), VirtualMic(ap), ring_buf(buffer_length) {
+    : logger(logger), pipesource_module_idx(-1), module_operation(nullptr),
+      state(InitContext), pb_state(PlaybackState::StreamEmpty), cur_act(),
+      VirtualMic(ap), ring_buf(buffer_length) {
   logger->trace("Init PipeSourceVirtualMic");
 
   shared_sample_spec.channels = 1;
@@ -147,7 +147,7 @@ void PipeSourceVirtualMic::run() {
         write_to_outputs();
         break;
       case UnloadModule:
-	unload_module();
+        unload_module();
       }
       switch (cur_act.action) {
       case CurrentAction::GetMicrophones:
@@ -270,7 +270,8 @@ void PipeSourceVirtualMic::get_microphones() {
 void PipeSourceVirtualMic::write_to_outputs() {
   uint8_t proc_buf[buffer_length];
   size_t processed = 0;
-  if (pb_state != Loopback && virtmic_source_state != PA_SOURCE_RUNNING || !requested_should_denoise) {
+  if (pb_state != Loopback && virtmic_source_state != PA_SOURCE_RUNNING ||
+      !requested_should_denoise) {
     // Don't waste cpu
     processed = ring_buf.size();
     std::copy(ring_buf.begin(), ring_buf.end(), proc_buf);
@@ -300,11 +301,11 @@ void PipeSourceVirtualMic::write_to_outputs() {
       switch (errno) {
       case EINTR:
       case EAGAIN:
-	break;
+        break;
       default:
-	stringstream ss;
-	ss << "pa_mainloop_iterate, write: " << strerror(errno);
-	throw std::runtime_error(ss.str());
+        stringstream ss;
+        ss << "pa_mainloop_iterate, write: " << strerror(errno);
+        throw std::runtime_error(ss.str());
       }
     } else {
       written += res;
@@ -423,7 +424,7 @@ void PipeSourceVirtualMic::start_recording_stream() {
       .tlength = (uint32_t)-1,
       .prebuf = (uint32_t)-1,
       .minreq = (uint32_t)-1,
-      .fragsize = (uint32_t)buffer_length/4,
+      .fragsize = (uint32_t)buffer_length / 4,
   };
   int err = pa_stream_connect_record(rec_stream.get(), source, &attr,
                                      (pa_stream_flags)PA_STREAM_ADJUST_LATENCY);
@@ -475,12 +476,12 @@ void PipeSourceVirtualMic::poll_recording_stream() {
       requested_should_denoise = false;
       {
         std::lock_guard<mutex> lg(updates_mutex);
-	stringstream ss;
-	ss << "Disabling audio processing due to high latency";
-	auto maybe_instructions = ap->get_lower_load_instructions();
-	if (maybe_instructions) {
-	  ss << ": " << *maybe_instructions;
-	}
+        stringstream ss;
+        ss << "Disabling audio processing due to high latency";
+        auto maybe_instructions = ap->get_lower_load_instructions();
+        if (maybe_instructions) {
+          ss << ": " << *maybe_instructions;
+        }
         updates.push({
             .text = ss.str(),
             .notify = true,
@@ -497,9 +498,10 @@ void PipeSourceVirtualMic::poll_recording_stream() {
         throw std::runtime_error(ss.str());
       }
       if (nbytes + ring_buf.size() > ring_buf.capacity()) {
-	break;
+        break;
       }
-      ring_buf.insert(ring_buf.end(), (uint8_t *)data, (uint8_t *)data  + nbytes);
+      ring_buf.insert(ring_buf.end(), (uint8_t *)data,
+                      (uint8_t *)data + nbytes);
       pa_stream_drop(rec_stream.get());
       readable_size -= nbytes;
     }
@@ -524,7 +526,7 @@ void PipeSourceVirtualMic::free_pa_stream(pa_stream *s) {
 }
 void PipeSourceVirtualMic::unload_module() {
   if (module_operation) {
-    switch(pa_operation_get_state(module_operation)) {
+    switch (pa_operation_get_state(module_operation)) {
     case PA_OPERATION_CANCELLED:
       throw std::runtime_error("module_load_operation cancelled!");
     case PA_OPERATION_RUNNING:

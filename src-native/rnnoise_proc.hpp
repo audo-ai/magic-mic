@@ -14,7 +14,9 @@ public:
   ~RNNoiseDenoiser();
   Info get_info() override;
   void process(uint8_t *in, uint8_t *out) override;
-  size_t get_chunk_size() override { return rnnoise_get_frame_size() * sizeof(short); };
+  size_t get_chunk_size() override {
+    return rnnoise_get_frame_size() * sizeof(short);
+  };
   AudioFormat get_audio_format() override { return AudioFormat::S16_LE; };
   int get_sample_rate() override { return 48000; };
 

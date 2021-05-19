@@ -215,15 +215,16 @@ vector<json> RPCServer::pop_responses() {
     break;
   }
   case RequestTypes::GetProcessors: {
-    auto &f = std::get<future<pair<int, vector<AudioProcessor::Info>>>>(resp.fut);
+    auto &f =
+        std::get<future<pair<int, vector<AudioProcessor::Info>>>>(resp.fut);
     if (f.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
       auto v = f.get();
       vector<json> infos;
       for (auto &info : std::get<1>(v)) {
-	infos.push_back({{"name", info.name}});
+        infos.push_back({{"name", info.name}});
       }
-      out.push_back(make_response(
-          resp.id, {{"list", infos}, {"cur", std::get<0>(v)}}));
+      out.push_back(
+          make_response(resp.id, {{"list", infos}, {"cur", std::get<0>(v)}}));
       current_response.reset();
     }
     break;

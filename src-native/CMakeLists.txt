@@ -10,7 +10,8 @@ set(PULSEAUDIO_MODULE_PATH
     CACHE PATH "path to the where to install module")
 set(VIRTMIC_ENGINE CACHE STRING "which virtual mic engine should be built")
 set_property(CACHE VIRTMIC_ENGINE PROPERTY STRINGS "PIPESOURCE")
-set(AUDIOPROC_CMAKES CACHE STRING "semicolon seperated list of paths to audioproc cmakes")
+set(AUDIOPROC_CMAKES
+    CACHE STRING "semicolon seperated list of paths to audioproc cmakes")
 
 # Build Server
 pkg_check_modules(libnotifymm REQUIRED IMPORTED_TARGET libnotifymm-1.0)
@@ -31,8 +32,17 @@ foreach(AP_CMAKE ${AUDIOPROC_CMAKES})
   get_filename_component(AP_NAME ${AP_CMAKE} NAME_WE)
   get_filename_component(AP_FILENAME ${AP_CMAKE} NAME)
   get_filename_component(AP_DIR ${AP_CMAKE} DIRECTORY)
-  message("Searching for ${AP_NAME} with config file ${AP_FILENAME} in dir ${AP_DIR}")
-  find_package(${AP_NAME} REQUIRED CONFIG CONFIGS ${AP_FILENAME} PATHS "${AP_DIR}" NO_DEFAULT_PATH)
+  message(
+    "Searching for ${AP_NAME} with config file ${AP_FILENAME} in dir ${AP_DIR}")
+  find_package(
+    ${AP_NAME}
+    REQUIRED
+    CONFIG
+    CONFIGS
+    ${AP_FILENAME}
+    PATHS
+    "${AP_DIR}"
+    NO_DEFAULT_PATH)
 endforeach()
 
 # Configure specifc virtmic engine
