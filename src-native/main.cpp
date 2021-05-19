@@ -137,8 +137,7 @@ int main(int argc, char **argv) {
 
   AudioProcessorManager apm(audio_processor_path);
 
-  ConcreteVirtualMic mic(apm.set_current(0).get(),
-                         l);
+  ConcreteVirtualMic mic(apm.set_current(0).get(), l);
   auto err_fut = mic.get_exception_future();
 
   RPCServer server(&mic, apm);
@@ -280,19 +279,13 @@ int main(int argc, char **argv) {
     }
     auto update = mic.get_update();
     if (update) {
-      switch (update->update) {
-      case VirtualMicUpdate::UpdateAudioProcessing:
-        logger->info("Updating audio processing likely due to high load; new "
-                     "value is: {}",
-                     update->audioProcessingValue);
-        if (Notify::is_initted()) {
-          Notify::Notification notification(
-              "Updating audio processing likely due to high load");
-          if (!notification.show()) {
-            logger->error("Failed to display notification");
-          }
+      logger->info("Virtual Mic update (notification{}requested): {}",
+                   update->notify ? " " : " not ", update->text);
+      if (update->notify && Notify::is_initted()) {
+        Notify::Notification notification(update->text);
+        if (!notification.show()) {
+          logger->error("Failed to display notification");
         }
-        break;
       }
     }
   }

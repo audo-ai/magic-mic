@@ -12,8 +12,6 @@ set(VIRTMIC_ENGINE CACHE STRING "which virtual mic engine should be built")
 set_property(CACHE VIRTMIC_ENGINE PROPERTY STRINGS "PIPESOURCE")
 set(AUDIOPROC_CMAKES CACHE STRING "semicolon seperated list of paths to audioproc cmakes")
 
-set(CMAKE_CXX_STANDARD 17)
-
 # Build Server
 pkg_check_modules(libnotifymm REQUIRED IMPORTED_TARGET libnotifymm-1.0)
 add_executable(server main.cpp rpc.cpp audio_processor_manager.cpp)

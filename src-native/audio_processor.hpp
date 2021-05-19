@@ -3,9 +3,11 @@
 #include <bits/stdint-uintn.h>
 #include <cstddef>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
+using std::optional;
 using std::shared_ptr;
 using std::string;
 using std::vector;
@@ -28,6 +30,9 @@ public:
   virtual size_t get_chunk_size() = 0;
   virtual AudioFormat get_audio_format() = 0;
   virtual int get_sample_rate() = 0;
+  virtual optional<string> get_lower_load_instructions() {
+    return std::nullopt;
+  };
 };
 
 typedef AudioProcessor *create_audio_processor_t();

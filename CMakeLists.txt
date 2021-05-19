@@ -135,6 +135,8 @@ macro(append_audioproc target)
       PARENT_SCOPE)
 endmacro()
 
+set(CMAKE_CXX_STANDARD 17)
+
 add_subdirectory(src-native)
 
 file(GLOB_RECURSE ALL_CODE_FILES ${PROJECT_SOURCE_DIR}/src-native/*.[ch]pp)

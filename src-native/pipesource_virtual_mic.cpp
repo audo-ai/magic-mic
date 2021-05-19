@@ -475,9 +475,15 @@ void PipeSourceVirtualMic::poll_recording_stream() {
       requested_should_denoise = false;
       {
         std::lock_guard<mutex> lg(updates_mutex);
+	stringstream ss;
+	ss << "Disabling audio processing due to high latency";
+	auto maybe_instructions = ap->get_lower_load_instructions();
+	if (maybe_instructions) {
+	  ss << ": " << *maybe_instructions;
+	}
         updates.push({
-            .update = VirtualMicUpdate::UpdateAudioProcessing,
-            .audioProcessingValue = false,
+            .text = ss.str(),
+            .notify = true,
         });
       }
     }

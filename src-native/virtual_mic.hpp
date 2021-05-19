@@ -15,10 +15,8 @@ using std::string;
 using std::vector;
 
 struct VirtualMicUpdate {
-  enum { UpdateAudioProcessing } update;
-  union {
-    bool audioProcessingValue;
-  };
+  string text;
+  bool notify;
 };
 /*
   VirtualMic's are expected to start their own thread and handle these functions
@@ -26,8 +24,8 @@ struct VirtualMicUpdate {
  */
 class VirtualMic {
 public:
-  VirtualMic(AudioProcessor *ap) : ap(ap) {};
-  virtual ~VirtualMic() {};
+  VirtualMic(AudioProcessor *ap) : ap(ap){};
+  virtual ~VirtualMic(){};
   virtual void stop() = 0;
   virtual void abortLastRequest() = 0;
   virtual future<bool> getStatus() = 0;
@@ -41,7 +39,7 @@ public:
 
   virtual future<std::exception_ptr> get_exception_future() = 0;
   virtual optional<VirtualMicUpdate> get_update() = 0;
+
 protected:
   AudioProcessor *ap;
-  
 };
