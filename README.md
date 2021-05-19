@@ -26,7 +26,7 @@ developers to build proprietary or free real time audio processing tools. Right
 now, implementing a custom audio processor is just a matter of writing some c++
 (we should have a guide soon), but the interface is quite immature and we're
 still quite far from realizing this vision, so reach out if you want to help!
-(**Where can people reach us?**)
+Contact us in the github discussions tab or the issues.
 
 ## Development
 ### Structure
