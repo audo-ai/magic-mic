@@ -41,7 +41,7 @@ The rough outline for building using rnnoise is:
 ```sh
 mkdir build
 cd build
-cmake -DVIRTMIC_ENGINE="PIPESOURCE" ..
+cmake -DVIRTMIC_ENGINE="PIPESOURCE" -DAUDIOPROC_CMAKES="$PWD/../src-native/RNNoiseAP.cmake" ..
 make install_tauri # Copies files and libs over to the src-tauri directory
 ```
 "PIPESOURCE" is the only virtmic engine available at the moment; in the future
@@ -59,8 +59,10 @@ RUST_LOG=trace TAURI_DEV=/home/gabe/code/audo/project-x/src-tauri/ yarn tauri de
 We use Docker builds for releases, but you can also use them for testing or just
 as a reference if you like. To make a build using rnnoise simply run
 ```sh
-DOCKER_BUILDKIT=1 docker build .
+DOCKER_BUILDKIT=1 docker build --output . . -f Dockerfile.rnnoise
 ```
+
+**OUTDATED (Will be updated soon)**
 To build using a custom audio processor you need to have another docker image
 with the shared library located at `/audioproc.so`. Then run
 
