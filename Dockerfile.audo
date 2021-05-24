@@ -1,7 +1,7 @@
 # Must be run with DOCKER_BUILDKIT=1
 # syntax=docker/dockerfile:experimental
 ARG AUDO_LIBDENOISER_IMAGE=libdenoiser
-FROM ubuntu:18.04 as deps
+FROM $AUDO_LIBDENOISER_IMAGE as deps
 
 SHELL ["/bin/bash", "-c"]
 # For some reason, things fail to install later without this command
@@ -59,45 +59,44 @@ RUN git clone --depth=1 https://github.com/xiph/rnnoise.git && \
     make install -j 4
 
 # Rust caching ideas from https://blog.mgattozzi.dev/caching-rust-docker-builds/
-RUN mkdir -p /src/src-tauri/src
-RUN echo "fn main() {}" > /src/src-tauri/dummy.rs
+RUN mkdir -p /src-magic-mic/src-tauri/src
+RUN echo "fn main() {}" > /src-magic-mic/src-tauri/dummy.rs
 # We might also need a dummy for build.rs but to be completely honest I'm not
 # sure what build.rs does
-COPY ./src-tauri/src/build.rs /src/src-tauri/src/build.rs
-COPY ./src-tauri/Cargo.lock /src/src-tauri
-COPY ./src-tauri/Cargo.toml /src/src-tauri
-RUN sed -i 's/src\/main.rs/dummy.rs/' /src/src-tauri/Cargo.toml
-RUN cd /src/src-tauri && \
+COPY ./src-tauri/src/build.rs /src-magic-mic/src-tauri/src/build.rs
+COPY ./src-tauri/Cargo.lock /src-magic-mic/src-tauri
+COPY ./src-tauri/Cargo.toml /src-magic-mic/src-tauri
+RUN sed -i 's/src\/main.rs/dummy.rs/' /src-magic-mic/src-tauri/Cargo.toml
+RUN cd /src-magic-mic/src-tauri && \
     source $HOME/.cargo/env && \
     cargo build --release
-RUN sed -i 's/dummy.rs/src\/main.rs/' /src/src-tauri/Cargo.toml
+RUN sed -i 's/dummy.rs/src\/main.rs/' /src-magic-mic/src-tauri/Cargo.toml
 
 # install src-web deps
-COPY ./src-web /src/src-web
-RUN cd /src/src-web && \
+COPY ./src-web /src-magic-mic/src-web
+RUN cd /src-magic-mic/src-web && \
     \. ~/.nvm/nvm.sh && nvm use 10.19 && yarn
 
 # install tauri cli deps
-COPY ./package.json /src
-RUN cd /src && \
+COPY ./package.json /src-magic-mic
+RUN cd /src-magic-mic && \
     source $HOME/.cargo/env && \
     \. ~/.nvm/nvm.sh && nvm use 10.19 && yarn
 
-COPY . /src
-
-FROM $AUDO_LIBDENOISER_IMAGE as audolibdenoiser
+COPY . /src-magic-mic
 
 FROM deps as build
-COPY --from=audolibdenoiser /AudoAP.cmake /
-COPY --from=audolibdenoiser /libdenoiser.so /
 # Apparently we have to redefine this variable for it to be accessible here?
 ARG AUDIO_PROCESSOR_IMAGE
-RUN cd /src && \
+RUN cd /src-magic-mic && \
     mkdir build && \
     cd build && \
     cmake -DCMAKE_CXX_COMPILER=`which g++-10` \
 	  -DCMAKE_BUILD_TYPE=RelWithDebInfo \
-	  -DAUDIOPROC_CMAKES="$PWD/../src-native/RNNoiseAP.cmake;/AudoAP.cmake" \
+	  -DAUDIOPROC_CMAKES="$PWD/../src-native/RNNoiseAP.cmake;/src/AudoAP.cmake" \
+	  -DMAGIC_MIC="/src-magic-mic/src-native" \
+	  -DCMAKE_PREFIX_PATH=/libtorch \
+	  -DIOMP_LIB=/opt/intel/compilers_and_libraries_2020.4.304/linux/compiler/lib/intel64_lin/libiomp5.a \
 	  -DVIRTMIC_ENGINE="PIPESOURCE" .. && \
     make install_tauri -j 4
 
@@ -109,10 +108,10 @@ RUN cd /src && \
 RUN mkdir $HOME/lsmod_shim && \
     echo -e '!/bin/bash\necho NOTHING' > $HOME/lsmod_shim/lsmod && \
     chmod +x $HOME/lsmod_shim/lsmod
-RUN cd /src && \
+RUN cd /src-magic-mic && \
     PATH=$HOME/lsmod_shim:$PATH && \
     source $HOME/.cargo/env && \
     \. ~/.nvm/nvm.sh && nvm use 10.19 && yarn tauri build
 
 FROM scratch as bin
-COPY --from=build /src/src-tauri/target/release/bundle/appimage/magic-mic.AppImage .
+COPY --from=build /src-magic-mic/src-tauri/target/release/bundle/appimage/magic-mic.AppImage .
