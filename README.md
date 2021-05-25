@@ -13,6 +13,22 @@ so is only available for pulseaudio on linux right now. This is still in active 
 
 You can get a prebuilt version of magic mic from our [releases](https://github.com/audo-ai/magic-mic/releases).
 
+## Usage
+Using Magic Mic should pretty much be as simple as executing the AppImage. 
+If you don't know how to do that see [this SO question](https://askubuntu.com/questions/774490/what-is-an-appimage-how-do-i-install-it).
+
+After executing the AppImage, Magic Mic should open and you should see an icon
+in your systray. From the magic mic window you can select your microphone, 
+enable and disable denoising, and select your denoising engine. Once that is set up
+you can test that everythng is working by clicking on the "Mic Check" button. 
+You can feel free to close the Magic Mic window whenever. It will continue
+to run in the background. If you did not move the Magic Mic AppImage, you can reopen
+the Magic Mic window by clicking on the icon in the systray and selecting "Open".
+You can also completely quit all of Magic Mic by clicking on "Quit."
+
+To use Magic Mic in an app that listens to your microphone, all you have to do is
+configure the app to use "Magic Mic" as the listening microphone.
+
 ## Open Source
 Our custom denoising model is proprietary. Only us at Audo can create builds
 using it as the denoising engine. If you would like to build Magic Mic yourself,
