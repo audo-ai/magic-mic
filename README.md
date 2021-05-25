@@ -14,8 +14,18 @@ so is only available for pulseaudio on linux right now. This is still in active 
 You can get a prebuilt version of magic mic from our [releases](https://github.com/audo-ai/magic-mic/releases).
 
 ## Usage
-Using Magic Mic should pretty much be as simple as executing the AppImage. 
-If you don't know how to do that see [this SO question](https://askubuntu.com/questions/774490/what-is-an-appimage-how-do-i-install-it).
+Using Magic Mic should pretty much be as simple as executing the AppImage.
+First download the AppImage from our releases then either make it executable in
+your file manager or run the following command in the terminal
+```sh
+chmod a+x /path/to/MagicMic.appimage
+```
+Then to run the AppImage you can either execute it from your file manager (for example by
+double clicking) or from the terminal
+```
+/path/to/MagicMic.appimage
+```
+We are still working on a more automated installation.
 
 After executing the AppImage, Magic Mic should open and you should see an icon
 in your systray. From the magic mic window you can select your microphone, 
