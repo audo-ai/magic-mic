@@ -2,7 +2,8 @@ name: Build Audo AI AppImage
 
 on:
   push:
-    branches: [ ]
+    branches-ignore:
+      - '**'
 
 jobs:
   build:
