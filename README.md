@@ -15,7 +15,7 @@ You can get a prebuilt version of magic mic from our [releases](https://github.c
 
 ## Usage
 Using Magic Mic should pretty much be as simple as executing the AppImage.
-First download the AppImage from our releases then either make it executable in
+First download the AppImage from our [releases](https://github.com/audo-ai/magic-mic/releases/tag/v0.1.1) then either make it executable in
 your file manager or run the following command in the terminal
 ```sh
 chmod a+x /path/to/MagicMic.appimage
