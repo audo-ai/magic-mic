@@ -39,6 +39,9 @@ You can also completely quit all of Magic Mic by clicking on "Quit."
 To use Magic Mic in an app that listens to your microphone, all you have to do is
 configure the app to use "Magic Mic" as the listening microphone.
 
+We don't have auto update implemeted yet, so please check back here every once in
+a while to check out new releases with new features!
+
 ## Open Source
 Our custom denoising model is proprietary. Only us at Audo can create builds
 using it as the denoising engine. If you would like to build Magic Mic yourself,
