@@ -1,8 +1,20 @@
 import React, { useState, useEffect, useRef } from "react";
 import ReactDOM from "react-dom";
 
-import { invoke, promisified } from "tauri/api/tauri";
 import { open } from "tauri/api/window";
+
+import {
+  getStatus,
+  getMicrophones,
+  getRemoveNoise,
+  setShouldRemoveNoise,
+  getProcessors,
+  setProcessor,
+  getLoopback,
+  setLoopback,
+  setMicrophone,
+} from "./cmd";
+import { trace } from "./utils";
 
 import "./main.scss";
 import "./device_selector.scss";
@@ -11,33 +23,11 @@ import "./toggle.scss";
 
 import logo from "./img/logo.png";
 import mic from "./img/mic.svg";
-import speaker from "./img/speaker.svg";
-
-const makeExternalCmd = (p) => {
-  return {
-    cmd: "externalCommand",
-    payload: p,
-  };
-};
-const makeLocalCmd = (p) => {
-  return {
-    cmd: "localCommand",
-    payload: p,
-  };
-};
-const DEBUG = 0;
-const ERROR = 1;
-const INFO = 2;
-const TRACE = 3;
-const WARN = 4;
-const log = (msg, level) => {
-  //invoke(makeLocalCmd({ cmd: "log", msg, level }));
-};
 
 const SelectWithImage = ({ options, image, chosen, setChosen }) => {
   return (
     <div className="select-with-image">
-      <img src={image} />
+      <img src={image} alt="decorative for select" />
       <div className="vert-line" />
       <label>
         <select value={chosen} onChange={(e) => setChosen(e.target.value)}>
@@ -52,6 +42,7 @@ const SelectWithImage = ({ options, image, chosen, setChosen }) => {
     </div>
   );
 };
+
 const DeviceSelector = ({ title, current, icon, devices, switchToDevice }) => {
   let map = {};
   let cur;
@@ -65,13 +56,7 @@ const DeviceSelector = ({ title, current, icon, devices, switchToDevice }) => {
   const [remove, setRemove] = useState(null);
   useEffect(() => {
     let cb = () => {
-      promisified(makeExternalCmd({ cmd: "getRemoveNoise" }))
-        .then((res) => {
-          setRemove(res);
-        })
-        .catch((v) =>
-          log(`getRemoveNoise error: "${JSON.stringify(v)}"`, ERROR)
-        );
+      getRemoveNoise(setRemove);
     };
     cb();
     let interval = setInterval(cb, 2000);
@@ -82,16 +67,10 @@ const DeviceSelector = ({ title, current, icon, devices, switchToDevice }) => {
   }, [current]);
   useEffect(() => {
     if (remove === null) {
-      log("remove is null", TRACE);
+      trace("remove is null");
       return;
     }
-    promisified(makeExternalCmd({ cmd: "setShouldRemoveNoise", value: remove }))
-      .then((v) =>
-        log(`setShouldRemoveNoise response: "${JSON.stringify(v)}"`, TRACE)
-      )
-      .catch((v) =>
-        log(`setShouldRemoveNoise error: "${JSON.stringify(v)}"`, ERROR)
-      );
+    setShouldRemoveNoise(remove);
   }, [remove]);
   return (
     <div className="device-selector">
@@ -102,13 +81,7 @@ const DeviceSelector = ({ title, current, icon, devices, switchToDevice }) => {
         chosen={device}
         setChosen={(v) => {
           setDevice(v);
-          switchToDevice(map[v])
-            .then((e) =>
-              log(`switchToDevice response: "${JSON.stringify(e)}"`, TRACE)
-            )
-            .catch((e) =>
-              log(`switchToDevice error: "${JSON.stringify(e)}"`, ERROR)
-            );
+          switchToDevice(map[v]);
         }}
       />
       <div className="remove-noise">
@@ -125,6 +98,7 @@ const DeviceSelector = ({ title, current, icon, devices, switchToDevice }) => {
     </div>
   );
 };
+
 const Options = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [procs, setProcs] = useState([]);
@@ -134,27 +108,19 @@ const Options = () => {
 
   useEffect(() => {
     let cb = () => {
-      promisified(makeExternalCmd({ cmd: "getProcessors" }))
-        .then((v) => {
-          setProcs(v["list"]);
-          setCurProc(v["cur"]);
-          log(`getAudioProcessors response: "${JSON.stringify(v)}"`, TRACE);
-        })
-        .catch((v) =>
-          log(`getAudioProcessors error: "${JSON.stringify(v)}"`, ERROR)
-        );
+      getProcessors((v) => {
+        setProcs(v["list"]);
+        setCurProc(v["cur"]);
+        trace(`getAudioProcessors response: "${JSON.stringify(v)}"`);
+      });
     };
     cb();
     let int = setInterval(cb, 5000);
     return () => clearInterval(int);
   }, []);
-  const setProcessor = (id) => {
+  const changeProcessor = (id) => {
     if (id !== curProc) {
-      promisified(makeExternalCmd({ cmd: "setProcessor", value: id }))
-        .then((v) => {
-          log(`setProcessor response: "${JSON.stringify(v)}"`, TRACE);
-        })
-        .catch((v) => log(`setProcessor error: "${JSON.stringify(v)}"`, ERROR));
+      setProcessor(id);
       setCurProc(id);
     }
   };
@@ -212,7 +178,7 @@ const Options = () => {
         <ul>
           {procs.map((p, i) => (
             <li
-              onClick={() => setProcessor(i)}
+              onClick={() => changeProcessor(i)}
               className={i === curProc ? "selected" : ""}
               key={p.name}
             >
@@ -227,66 +193,43 @@ const Options = () => {
     </>
   );
 };
+
 const App = () => {
   const [devices, setDevices] = useState([]);
   const [curDevice, setCurrentDevice] = useState();
-  const [loopback, setLoopback] = useState(null);
+  const [loopback, setShouldLoopback] = useState(null);
   const [status, setStatus] = useState("Waiting");
   useEffect(() => {
     let cb = () => {
-      promisified(makeExternalCmd({ cmd: "getLoopback" }))
-        .then((res) => {
-          setLoopback(res);
-        })
-        .catch((v) => log(`getLoopback error: "${JSON.stringify(v)}"`, ERROR));
+      getLoopback(setShouldLoopback);
     };
     cb();
     let interval = setInterval(cb, 2000);
     return () => clearInterval(interval);
-  }, [setLoopback]);
+  }, [setShouldLoopback]);
   useEffect(() => {
     // This clear interval stuff is definetly broken. Need to fix it
     const cb = () => {
-      promisified(makeExternalCmd({ cmd: "getStatus" }))
-        .then((v) => {
-          if (v === true) {
-            setStatus("Good");
-          } else if (status === "Good") {
-            setStatus("Lost");
-          } else {
-            setStatus("Failed");
-          }
-          log(`getStatus response: "${JSON.stringify(v)}"`, TRACE);
-        })
-        .catch((v) => log(`getStatus error: "${JSON.stringify(v)}"`, ERROR))
-        .finally((v) => {
-          let time = 10000;
-          switch (status) {
-            case "Good":
-              time = 10000;
-              break;
-            case "Waiting":
-              time = 500;
-            case "Lost":
-            case "Failed":
-              return;
-          }
-          setTimeout(cb, time);
-        });
+      getStatus((v) => {
+        if (v === true) {
+          setStatus("Good");
+        } else if (status === "Good") {
+          setStatus("Lost");
+        } else {
+          setStatus("Failed");
+        }
+        trace(`getStatus response: "${JSON.stringify(v)}"`);
+      });
+      setTimeout(cb, 1000);
     };
     cb();
   }, [status]);
   useEffect(() => {
     let cb = () => {
-      promisified(makeExternalCmd({ cmd: "getMicrophones" }))
-        .then((v) => {
-          setDevices(v["list"]);
-          setCurrentDevice(v["cur"]);
-          log(`getMicrophones response: "${JSON.stringify(v)}"`, TRACE);
-        })
-        .catch((v) =>
-          log(`getMicrophones error: "${JSON.stringify(v)}"`, ERROR)
-        );
+      getMicrophones((v) => {
+        setDevices(v["list"]);
+        setCurrentDevice(v["cur"]);
+      });
     };
     cb();
     let int = setInterval(cb, 5000);
@@ -298,9 +241,7 @@ const App = () => {
       return;
     }
     if (devices.length > 0) {
-      promisified(makeExternalCmd({ cmd: "setLoopback", value: loopback }))
-        .then((v) => log(`setLoopback response: "${JSON.stringify(v)}"`, TRACE))
-        .catch((v) => log(`setLoopback error: "${JSON.stringify(v)}"`, ERROR));
+      setLoopback(loopback);
     }
   }, [loopback, devices]);
   useEffect(() => {
@@ -309,9 +250,7 @@ const App = () => {
       return;
     }
     if (devices.length > 0) {
-      promisified(makeExternalCmd({ cmd: "setLoopback", value: loopback }))
-        .then((v) => log(`setLoopback response: "${JSON.stringify(v)}"`, TRACE))
-        .catch((v) => log(`setLoopback error: "${JSON.stringify(v)}"`, ERROR));
+      setLoopback(loopback);
     }
   }, [loopback, devices]);
 
@@ -320,24 +259,17 @@ const App = () => {
       return (
         <div id="main-container">
           <Options />
-          <img id="logo" src={logo} />
+          <img id="logo" src={logo} alt="logo" />
           <DeviceSelector
             title="Microphone"
             current={curDevice}
             icon={mic}
             devices={devices}
-            switchToDevice={(v) =>
-              promisified(
-                makeExternalCmd({
-                  cmd: "setMicrophone",
-                  value: v,
-                })
-              )
-            }
+            switchToDevice={(v) => setMicrophone(v)}
           />
           {/*<DeviceSelector title="Speakers" icon={speaker} devices={[{name:"Speakers - System Default", id:0}]} /> */}
           <div id="bottom">
-            <p id="loopback" onClick={() => setLoopback(!loopback)}>
+            <p id="loopback" onClick={() => setShouldLoopback(!loopback)}>
               {" "}
               {loopback ? "Stop" : "Mic Check"}{" "}
             </p>
