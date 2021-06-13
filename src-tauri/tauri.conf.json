@@ -1,58 +1,58 @@
 {
-  "build": {
-    "distDir": "../src-web/build",
-    "devPath": "http://localhost:3000",
-    "beforeDevCommand": "cd src-web && BROWSER=none yarn start",
-    "beforeBuildCommand": "./scripts/beforeBuildCommand.sh"
-  },
-  "ctx": {},
-  "tauri": {
-    "embeddedServer": {
-      "active": true
+    "build": {
+	"distDir": "../src-web/build",
+	"devPath": "http://localhost:3000",
+	"beforeDevCommand": "cd src-web && BROWSER=none yarn start",
+	"beforeBuildCommand": "./scripts/beforeBuildCommand.sh"
     },
-    "bundle": {
-      "active": true,
-      "targets": "all",
-      "identifier": "com.tauri.dev",
-      "icon": [
-        "icons/32x32.png",
-        "icons/128x128.png",
-        "icons/128x128@2x.png",
-        "icons/icon.icns",
-        "icons/icon.ico"
-      ],
-      "resources": ["native/runtime_libs", "icons/icon.icns"],
-      "externalBin": ["native/server"],
-      "copyright": "",
-      "category": "DeveloperTool",
-      "shortDescription": "",
-      "longDescription": "",
-      "deb": {
-        "depends": [],
-        "useBootstrapper": false
-      },
-      "osx": {
-        "frameworks": [],
-        "minimumSystemVersion": "",
-        "useBootstrapper": false
-      },
-      "exceptionDomain": ""
-    },
-    "allowlist": {
-      "all": true
-    },
-    "window": {
-      "title": "Magic Mic",
-      "width": 800,
-      "height": 600,
-      "resizable": true,
-      "fullscreen": false
-    },
-    "security": {
-      "csp": "default-src blob: data: filesystem: ws: http: https: 'unsafe-eval' 'unsafe-inline'"
-    },
-    "inliner": {
-      "active": true
+    "tauri": {
+	"bundle": {
+	    "active": true,
+	    "targets": "all",
+	    "identifier": "com.tauri.dev",
+	    "icon": [
+		"icons/32x32.png",
+		"icons/128x128.png",
+		"icons/128x128@2x.png",
+		"icons/icon.icns",
+		"icons/icon.ico"
+	    ],
+	    "resources": ["native/runtime_libs", "icons/icon.icns"],
+	    "externalBin": ["native/server"],
+	    "copyright": "",
+	    "category": "DeveloperTool",
+	    "shortDescription": "",
+	    "longDescription": "",
+	    "deb": {
+		"depends": [],
+		"useBootstrapper": false
+	    },
+	    "macOS": {
+		"exceptionDomain": "",
+		"signingIdentity": null,
+		"entitlements": null,
+		"frameworks": [],
+		"minimumSystemVersion": "",
+		"useBootstrapper": false
+	    },
+	    "windows": {
+		"certificateThumbprint": null,
+		"digestAlgorithm": "sha256",
+		"timestampUrl": ""
+	    }
+	},
+	"allowlist": {
+	    "all": true
+	},
+	"windows": [{
+	    "title": "Magic Mic",
+	    "width": 800,
+	    "height": 600,
+	    "resizable": true,
+	    "fullscreen": false
+	}],
+	"security": {
+	    "csp": "default-src blob: data: filesystem: ws: wss: http: https: tauri: 'unsafe-eval' 'unsafe-inline' 'self'"
+	}
     }
-  }
 }

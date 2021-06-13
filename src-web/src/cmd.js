@@ -1,9 +1,9 @@
-import { promisified } from "tauri/api/tauri";
+import { invoke } from "@tauri-apps/api/tauri";
 
 import { makeExternalCmd, trace, error } from "./utils";
 
 export const getRemoveNoise = (cb) => {
-  promisified(makeExternalCmd({ cmd: "getRemoveNoise" }))
+  invoke("getRemoveNoise")
     .then((res) => {
       cb(res);
     })
@@ -13,7 +13,7 @@ export const getRemoveNoise = (cb) => {
 };
 
 export const setShouldRemoveNoise = (remove) => {
-  promisified(makeExternalCmd({ cmd: "setShouldRemoveNoise", value: remove }))
+  invoke("setShouldRemoveNoise", { value: remove })
     .then((res) => {
       trace(`setShouldRemoveNoise response: "${JSON.stringify(res)}"`);
     })
@@ -23,7 +23,7 @@ export const setShouldRemoveNoise = (remove) => {
 };
 
 export const getProcessors = (cb) => {
-  promisified(makeExternalCmd({ cmd: "getProcessors" }))
+  invoke("getProcessors")
     .then((res) => {
       cb(res);
     })
@@ -33,7 +33,7 @@ export const getProcessors = (cb) => {
 };
 
 export const setProcessor = (id) => {
-  promisified(makeExternalCmd({ cmd: "setProcessor", value: id }))
+  invoke("setProcessor", { value: id })
     .then((v) => {
       trace(`setProcessor response: "${JSON.stringify(v)}"`);
     })
@@ -41,7 +41,7 @@ export const setProcessor = (id) => {
 };
 
 export const getLoopback = (cb) => {
-  promisified(makeExternalCmd({ cmd: "getLoopback" }))
+  invoke("getLoopback")
     .then((res) => {
       cb(res);
     })
@@ -49,7 +49,7 @@ export const getLoopback = (cb) => {
 };
 
 export const getStatus = (cb) => {
-  promisified(makeExternalCmd({ cmd: "getStatus" }))
+  invoke("getStatus")
     .then((v) => {
       cb(v);
       trace(`getStatus response: "${JSON.stringify(v)}"`);
@@ -58,7 +58,7 @@ export const getStatus = (cb) => {
 };
 
 export const getMicrophones = (cb) => {
-  promisified(makeExternalCmd({ cmd: "getMicrophones" }))
+  invoke("getMicrophones")
     .then((v) => {
       cb(v);
       trace(`getMicrophones response: "${JSON.stringify(v)}"`);
@@ -67,13 +67,13 @@ export const getMicrophones = (cb) => {
 };
 
 export const setLoopback = (loopback) => {
-  promisified(makeExternalCmd({ cmd: "setLoopback", value: loopback }))
+  invoke("setLoopback", { value: loopback })
     .then((v) => trace(`setLoopback response: "${JSON.stringify(v)}"`))
     .catch((v) => error(`setLoopback error: "${JSON.stringify(v)}"`));
 };
 
 export const setMicrophone = (microphone) => {
-  promisified(makeExternalCmd({ cmd: "setMicrophone", value: microphone }))
+  invoke("setMicrophone", { value: microphone })
     .then((v) => trace(`setMicrophone response: "${JSON.stringify(v)}"`))
     .catch((v) => error(`setMicrophone error: "${JSON.stringify(v)}"`));
 };

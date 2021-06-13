@@ -1,17 +1,4 @@
-import { invoke } from "tauri/api/tauri";
-
-export const makeExternalCmd = (p) => {
-  return {
-    cmd: "externalCommand",
-    payload: p,
-  };
-};
-export const makeLocalCmd = (p) => {
-  return {
-    cmd: "localCommand",
-    payload: p,
-  };
-};
+import { invoke } from "@tauri-apps/api/tauri";
 
 const DEBUG = 0;
 const ERROR = 1;
@@ -20,7 +7,7 @@ const TRACE = 3;
 const WARN = 4;
 
 const log = (msg, level) => {
-  invoke(makeLocalCmd({ cmd: "log", msg, level }));
+  invoke('jsLog', { msg: msg, level: level });
 };
 
 export const debug = (msg) => log(msg, DEBUG);

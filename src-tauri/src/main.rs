@@ -5,70 +5,38 @@
 
 use std::{
   env,
-  os::unix::net::UnixStream,
   path::PathBuf,
   process::{Command, Stdio},
-  sync::mpsc,
-  thread,
+  thread::spawn,
 };
 use tauri::api::*;
 #[macro_use]
 extern crate log;
+
+use tokio::{
+  net::UnixStream,
+  runtime::Handle,
+  sync::{mpsc, oneshot},
+  time::{sleep, Duration},
+};
 
 mod cmd;
 mod rpc;
 use cmd::*;
 use rpc::*;
 
-// https://github.com/tauri-apps/tauri/issues/1308
-fn get_real_resource_dir() -> Option<PathBuf> {
-  let p = tauri::api::path::resource_dir()?;
-  match (env::var("APPDIR"), env::var("TAURI_DEV")) {
-    (Ok(v), _) => {
-      let mut root = PathBuf::from(v);
-      if p.has_root() {
-        // only on linux here
-        root.push(
-          p.strip_prefix("/")
-            .expect("has_root() returned true; we should be able to strip / prefix"),
-        );
-      } else {
-        root.push(p);
-      }
-      Some(root)
-    }
-    (Err(_), Ok(v)) => Some(v.into()),
-    (Err(_), Err(_)) => Some(p.into()),
-  }
-}
-
-fn main() {
+#[tokio::main]
+async fn main() -> () {
   env_logger::init();
   info!("Starting");
 
-  let exe_path = env::current_exe().expect("Get current_exe");
+  let ctx = tauri::generate_context!();
+
+  let exe_path = process::current_binary().expect("Get current_exe");
   info!("Exe path: {:?}", exe_path.clone().into_os_string());
 
-  // app is either dev or bundled. When it is dev we have to find bins
-  // ourselves. Otherwise we can hopefully rely on
-  // tauri_api::command::command_path
-  let server_path = match env::var("TAURI_DEV") {
-    Err(_) => {
-      command::command_path(command::binary_command("server".to_string()).unwrap()).unwrap()
-    }
-    Ok(p) => {
-      let mut path: PathBuf = p.into();
-      path.push("native");
-      path.push(command::binary_command("server".to_string()).unwrap());
-      path
-        .into_os_string()
-        .into_string()
-        .expect("Can convert path to String")
-    }
-  };
-  trace!("Server Path is: {}", server_path);
-
-  let resource_dir = get_real_resource_dir().expect("resource dir required");
+  let resource_dir =
+    tauri::api::path::resource_dir(ctx.package_info()).expect("resource dir required");
 
   let mut runtime_lib_path = resource_dir.clone();
   runtime_lib_path.push("native");
@@ -102,97 +70,79 @@ fn main() {
 
   info!("Socket path: {:?}", sock_path.clone().into_os_string());
 
-  let stream = match UnixStream::connect(sock_path.clone().into_os_string()) {
+  let stream = match UnixStream::connect(sock_path.clone().into_os_string()).await {
     Ok(s) => s,
     Err(e) => {
       info!("Starting new server; error was: {}", e);
-      Command::new(server_path)
-        .env("LD_LIBRARY_PATH", preload_lib_path.into_os_string())
-        .arg(sock_path.clone().into_os_string())
-        .arg(icon_path.into_os_string())
-        .arg(exe_path.clone().into_os_string())
-        .arg(audio_processor_path.clone().into_os_string())
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::inherit())
-        .spawn()
-        .expect("spawn server process");
+      let args: Vec<String> = vec![
+        sock_path
+          .clone()
+          .into_os_string()
+          .into_string()
+          .expect("sock_path valid string"),
+        icon_path
+          .into_os_string()
+          .into_string()
+          .expect("icon_path valid string"),
+        exe_path
+          .clone()
+          .into_os_string()
+          .into_string()
+          .expect("exe_path valid string"),
+        audio_processor_path
+          .clone()
+          .into_os_string()
+          .into_string()
+          .expect("audio_processor_path valid string"),
+      ];
+      process::Command::new_sidecar("server")
+	.expect("Create server command struct")
+	.envs(
+	  [(
+	    "LD_LIBRARY_PATH".into(),
+	    preload_lib_path.to_str().expect("No unicode chars").into(),
+	  )]
+	    .iter() // convert to hashmap
+	    .cloned()
+	    .collect(),
+	)
+	.args(args.into_iter())
+	.spawn()
+	.expect("spawn server process");
 
       // TODO: We have a race condition here because we want the spawned process to
       // start the socket server, so we don't know when its listening
-      thread::sleep(std::time::Duration::from_millis(500));
+      sleep(Duration::from_millis(500)).await;
       UnixStream::connect(sock_path.clone().into_os_string())
+        .await
         .expect("Failed to connect to socket; FIX THIS RACE CONDITON")
     }
   };
 
-  let (to_server, from_main) = mpsc::channel();
-  thread::spawn(|| server_thread(stream, from_main));
+  let (to_server, from_main) = mpsc::channel(32);
+  let handle = Handle::current();
+  spawn(move || {
+    handle.spawn(async move { server_thread(stream, from_main).await });
+  });
 
-  tauri::AppBuilder::new()
-    .invoke_handler(move |_webview, arg| {
-      match serde_json::from_str(arg) {
-        Err(e) => Err(e.to_string()),
-        Ok(command) => {
-          match command {
-            JsCmd {
-              cmd: Cmd::LocalCommand {
-                payload: LocalCmd::Exit,
-              },
-              ..
-            } => Ok(()),
-            JsCmd {
-              cmd:
-                Cmd::LocalCommand {
-                  payload: LocalCmd::Log { msg, level },
-                },
-              ..
-            } => {
-              // TODO env_logger doesn't seem to print the target. not sure if I
-              // am misunderstanding the purpose of target, or if env_logger
-              // just doesn't do that or what, but prefixingwith "js: " is my
-              // temporary workaround
-              match level {
-                0 => {
-                  debug!(target: "js", "js: {}", msg);
-                  Ok(())
-                }
-                1 => {
-                  error!(target: "js", "js: {}", msg);
-                  Ok(())
-                }
-                2 => {
-                  info!(target: "js", "js: {}", msg);
-                  Ok(())
-                }
-                3 => {
-                  trace!(target: "js", "js: {}", msg);
-                  Ok(())
-                }
-                4 => {
-                  // 4=warn (totally intentional)
-                  warn!(target: "js", "js: {}", msg);
-                  Ok(())
-                }
-                _ => {
-                  warn!(target: "js", "Recieved invalid log level from javsascript");
-                  Err("Recieved invalid log level from javsascript".into())
-                }
-              }
-            }
-            JsCmd {
-              callback: Some(callback),
-              error: Some(error),
-              cmd: Cmd::ExternalCommand { payload },
-            } => to_server
-              .send((_webview.as_mut(), (payload, callback, error)))
-              .map_err(|e| format!("sending error: {}", e)),
-            JsCmd { .. } => Err("JsCmd found missing callback or error".into()),
-          }
-        }
-      }
-    })
-    .build()
-    .run();
+  tauri::Builder::default()
+    .manage(to_server)
+    .invoke_handler(tauri::generate_handler![
+      cmd::getStatus,
+      cmd::getLoopback,
+      cmd::getRemoveNoise,
+      cmd::setLoopback,
+      cmd::setShouldRemoveNoise,
+      cmd::setMicrophone,
+      cmd::getMicrophones,
+      cmd::getProcessors,
+      cmd::setProcessor,
+      cmd::jsLog,
+    ])
+    .run(ctx)
+    .expect("Error while running tauri app");
+
   info!("Exiting");
+
+  ()
 }

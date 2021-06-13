@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import ReactDOM from "react-dom";
 
-import { open } from "tauri/api/window";
+import { open } from "@tauri-apps/api/shell";
 
 import {
   getStatus,
