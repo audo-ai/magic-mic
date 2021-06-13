@@ -77,12 +77,13 @@ make install_tauri # Copies files and libs over to the src-tauri directory
 this may change for other platform or if we implement other virtual microphones.
 
 #### Frontend
-First you need to install [tauri](https://tauri.studio/en/). Then you need to
+First you need to install [tauri](https://tauri.studio/en/) and run the `make
+install_tauri` command from above. Then you need to
 run `yarn` from the project root directory and the `src-web` directory. From
 there, running the app should be as simple as running `yarn tauri dev`, however
 tauri has some bugs currently so you need to run
 ```sh
-RUST_LOG=trace TAURI_DEV=/home/gabe/code/audo/project-x/src-tauri/ yarn tauri dev
+RUST_LOG=trace make -C src-tauri dev
 ```
 ### Building with Docker
 We use Docker builds for releases, but you can also use them for testing or just
