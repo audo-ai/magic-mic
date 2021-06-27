@@ -3,12 +3,7 @@
   windows_subsystem = "windows"
 )]
 
-use std::{
-  env,
-  path::PathBuf,
-  process::{Command, Stdio},
-  thread::spawn,
-};
+use std::{env, thread::spawn};
 use tauri::api::*;
 #[macro_use]
 extern crate log;
@@ -16,13 +11,12 @@ extern crate log;
 use tokio::{
   net::UnixStream,
   runtime::Handle,
-  sync::{mpsc, oneshot},
+  sync::mpsc,
   time::{sleep, Duration},
 };
 
 mod cmd;
 mod rpc;
-use cmd::*;
 use rpc::*;
 
 #[tokio::main]
@@ -96,19 +90,19 @@ async fn main() -> () {
           .expect("audio_processor_path valid string"),
       ];
       process::Command::new_sidecar("server")
-	.expect("Create server command struct")
-	.envs(
-	  [(
-	    "LD_LIBRARY_PATH".into(),
-	    preload_lib_path.to_str().expect("No unicode chars").into(),
-	  )]
-	    .iter() // convert to hashmap
-	    .cloned()
-	    .collect(),
-	)
-	.args(args.into_iter())
-	.spawn()
-	.expect("spawn server process");
+        .expect("Create server command struct")
+        .envs(
+          [(
+            "LD_LIBRARY_PATH".into(),
+            preload_lib_path.to_str().expect("No unicode chars").into(),
+          )]
+          .iter() // convert to hashmap
+          .cloned()
+          .collect(),
+        )
+        .args(args.into_iter())
+        .spawn()
+        .expect("spawn server process");
 
       // TODO: We have a race condition here because we want the spawned process to
       // start the socket server, so we don't know when its listening

@@ -1,3 +1,6 @@
+// The native rpc commands aren't snake case, so I think it makes sense to keep
+// the tauri rpc commands in parity if possible
+#![allow(non_snake_case)]
 use serde::Deserialize;
 use tokio::sync::{mpsc, oneshot};
 
@@ -21,9 +24,20 @@ pub enum LocalCmd {
   Exit,
 }
 
-fn rpc_error_string(err: crate::rpc::JSONRpcResp) -> String {
+fn rpc_error_string(_err: crate::rpc::JSONRpcResp) -> String {
   // it should eventually give a meaningul string for an error and also if the rpcresp isn't actually an error say something like "handle_rror calle but doesn't appear to be error"
   "handle_error not implemented yet".into()
+}
+async fn send_command_to_server(
+  send: &mpsc::Sender<(ServerCmd, oneshot::Sender<crate::rpc::JSONRpcResp>)>,
+  cmd: ServerCmd,
+  tx: oneshot::Sender<crate::rpc::JSONRpcResp>,
+) -> Result<(), String> {
+  send
+    .send((cmd, tx))
+    .await
+    .map(|_v| ())
+    .map_err(|_e| "Failed to send command to server thread".into())
 }
 
 #[tauri::command]
@@ -31,7 +45,7 @@ pub async fn getStatus(
   state: tauri::State<'_, mpsc::Sender<(ServerCmd, oneshot::Sender<crate::rpc::JSONRpcResp>)>>,
 ) -> Result<bool, String> {
   let (tx, rx) = oneshot::channel();
-  state.send((ServerCmd::GetStatus, tx)).await;
+  send_command_to_server(&state, ServerCmd::GetStatus, tx).await?;
 
   match rx.await {
     Ok(crate::rpc::JSONRpcResp {
@@ -51,7 +65,7 @@ pub async fn getLoopback(
   state: tauri::State<'_, mpsc::Sender<(ServerCmd, oneshot::Sender<crate::rpc::JSONRpcResp>)>>,
 ) -> Result<bool, String> {
   let (tx, rx) = oneshot::channel();
-  state.send((ServerCmd::GetLoopback, tx)).await;
+  send_command_to_server(&state, ServerCmd::GetLoopback, tx).await?;
 
   match rx.await {
     Ok(crate::rpc::JSONRpcResp {
@@ -71,7 +85,7 @@ pub async fn getRemoveNoise(
   state: tauri::State<'_, mpsc::Sender<(ServerCmd, oneshot::Sender<crate::rpc::JSONRpcResp>)>>,
 ) -> Result<bool, String> {
   let (tx, rx) = oneshot::channel();
-  state.send((ServerCmd::GetRemoveNoise, tx)).await;
+  send_command_to_server(&state, ServerCmd::GetRemoveNoise, tx).await?;
 
   match rx.await {
     Ok(crate::rpc::JSONRpcResp {
@@ -92,9 +106,7 @@ pub async fn setShouldRemoveNoise(
   value: bool,
 ) -> Result<(), String> {
   let (tx, rx) = oneshot::channel();
-  state
-    .send((ServerCmd::SetShouldRemoveNoise { value: value }, tx))
-    .await;
+  send_command_to_server(&state, ServerCmd::SetShouldRemoveNoise { value: value }, tx).await?;
 
   match rx.await {
     Ok(_) => Ok(()),
@@ -110,7 +122,7 @@ pub async fn getProcessors(
   state: tauri::State<'_, mpsc::Sender<(ServerCmd, oneshot::Sender<crate::rpc::JSONRpcResp>)>>,
 ) -> Result<serde_json::Value, String> {
   let (tx, rx) = oneshot::channel();
-  state.send((ServerCmd::GetProcessors, tx)).await;
+  send_command_to_server(&state, ServerCmd::GetProcessors, tx).await?;
 
   match rx.await {
     Ok(crate::rpc::JSONRpcResp {
@@ -131,9 +143,7 @@ pub async fn setProcessor(
   value: i32,
 ) -> Result<(), String> {
   let (tx, rx) = oneshot::channel();
-  state
-    .send((ServerCmd::SetProcessor { value: value }, tx))
-    .await;
+  send_command_to_server(&state, ServerCmd::SetProcessor { value: value }, tx).await?;
 
   match rx.await {
     Ok(_) => Ok(()),
@@ -148,7 +158,7 @@ pub async fn getMicrophones(
   state: tauri::State<'_, mpsc::Sender<(ServerCmd, oneshot::Sender<crate::rpc::JSONRpcResp>)>>,
 ) -> Result<serde_json::Value, String> {
   let (tx, rx) = oneshot::channel();
-  state.send((ServerCmd::GetMicrophones, tx)).await;
+  send_command_to_server(&state, ServerCmd::GetMicrophones, tx).await?;
 
   match rx.await {
     Ok(crate::rpc::JSONRpcResp {
@@ -172,9 +182,7 @@ pub async fn setLoopback(
   value: bool,
 ) -> Result<(), String> {
   let (tx, rx) = oneshot::channel();
-  state
-    .send((ServerCmd::SetLoopback { value: value }, tx))
-    .await;
+  send_command_to_server(&state, ServerCmd::SetLoopback { value: value }, tx).await?;
 
   match rx.await {
     Ok(_) => Ok(()),
@@ -190,9 +198,7 @@ pub async fn setMicrophone(
   value: i32,
 ) -> Result<(), String> {
   let (tx, rx) = oneshot::channel();
-  state
-    .send((ServerCmd::SetMicrophone { value: value }, tx))
-    .await;
+  send_command_to_server(&state, ServerCmd::SetMicrophone { value: value }, tx).await?;
 
   match rx.await {
     Ok(_) => Ok(()),

@@ -2,7 +2,7 @@ use crate::cmd::*;
 use rand;
 use rand::Rng;
 use serde::*;
-use std::{collections::HashMap, io::*, string::String};
+use std::{collections::HashMap, fmt, string::String};
 use tokio::{
   net::UnixStream,
   sync::{mpsc, oneshot::Sender},
@@ -21,6 +21,17 @@ pub struct JSONRpcResp {
   pub id: String,
   pub result: Option<serde_json::Value>,
   pub error: Option<serde_json::Value>,
+}
+
+impl fmt::Debug for JSONRpcResp {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    f.debug_struct("JSONRpcReq")
+      .field("jsonrpc", &self.jsonrpc)
+      .field("id", &self.id)
+      .field("error", &self.result)
+      .field("result", &self.error)
+      .finish()
+  }
 }
 
 fn get_id() -> String {
@@ -162,7 +173,7 @@ pub async fn server_thread(
 	    buf.clear();
 	    match reqs.remove(&resp.id) {
 	      Some(send) => {
-		send.send(resp);
+		send.send(resp).expect("Send server response from server thread back to command");
 	      }
 	      None => {
 		error!("RPC Response ID not found: {}", resp.id);
