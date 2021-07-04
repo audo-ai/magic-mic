@@ -1,6 +1,6 @@
 # Must be run with DOCKER_BUILDKIT=1
 # syntax=docker/dockerfile:experimental
-FROM ubuntu:18.04 as deps
+FROM ubuntu:18.04 as common
 
 SHELL ["/bin/bash", "-c"]
 # For some reason, things fail to install later without this command
@@ -34,8 +34,8 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
 
 # We need a newer version of node than ubuntu has
 RUN wget -qO- https://raw.githubusercontent.com/nvm-sh/nvm/v0.37.2/install.sh | bash
-RUN \. ~/.nvm/nvm.sh && nvm install 10.19
-RUN \. ~/.nvm/nvm.sh && nvm use 10.19 && npm install --global yarn
+RUN \. ~/.nvm/nvm.sh && nvm install 12.13
+RUN \. ~/.nvm/nvm.sh && nvm use 12.13 && npm install --global yarn
 
 # Install cargo and rust through rustup
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y && \
@@ -74,40 +74,36 @@ RUN sed -i 's/dummy.rs/src\/main.rs/' /src/src-tauri/Cargo.toml
 # install src-web deps
 COPY ./src-web /src/src-web
 RUN cd /src/src-web && \
-    \. ~/.nvm/nvm.sh && nvm use 10.19 && yarn
+    \. ~/.nvm/nvm.sh && nvm use 12.13 && yarn
 
 # install tauri cli deps
 COPY ./package.json /src
 RUN cd /src && \
     source $HOME/.cargo/env && \
-    \. ~/.nvm/nvm.sh && nvm use 10.19 && yarn
+    \. ~/.nvm/nvm.sh && nvm use 12.13 && yarn
 
 COPY . /src
-
-FROM deps as build
-# Apparently we have to redefine this variable for it to be accessible here?
-ARG AUDIO_PROCESSOR_IMAGE
-RUN cd /src && \
-    mkdir build && \
-    cd build && \
-    cmake -DCMAKE_CXX_COMPILER=`which g++-10` \
-	  -DCMAKE_BUILD_TYPE=RelWithDebInfo \
-	  -DAUDIOPROC_CMAKES="$PWD/../src-native/RNNoiseAP.cmake" \
-	  -DVIRTMIC_ENGINE="PIPESOURCE" .. && \
-    make install_tauri -j 4
 
 # appimagetool seems to want to use fuse for some reason to create the appimage,
 # but it doesn't need it. build_appimage.sh checks if fuse is usable with lsmod
 # | grep fuse. fuse is annoying to use on docker so we'll just shim lsmod not to
 # list fuse. I think the reason it lists fuse even though fuse is not usable on
 # docker is probably because of the docker sandboxing
-RUN mkdir $HOME/lsmod_shim && \
-    echo -e '!/bin/bash\necho NOTHING' > $HOME/lsmod_shim/lsmod && \
-    chmod +x $HOME/lsmod_shim/lsmod
+RUN echo -e '!/bin/bash\necho NOTHING' >/usr/local/bin/lsmod && \
+    chmod +x /usr/local/bin
+
+FROM common as rnnoise
 RUN cd /src && \
     PATH=$HOME/lsmod_shim:$PATH && \
     source $HOME/.cargo/env && \
-    \. ~/.nvm/nvm.sh && nvm use 10.19 && yarn tauri build
+    \. ~/.nvm/nvm.sh && nvm use 12.13 && \
+    mkdir build && \
+    cd build && \
+    cmake -DCMAKE_CXX_COMPILER=`which g++-10` \
+	  -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+	  -DAUDIOPROC_CMAKES="$PWD/../src-native/RNNoiseAP.cmake" \
+	  -DVIRTMIC_ENGINE="PIPESOURCE" .. && \
+    make build_tauri -j $(nproc)
 
 FROM scratch as bin
-COPY --from=build /src/src-tauri/target/release/bundle/appimage/magic-mic.AppImage .
+COPY --from=rnnoise /src/src-tauri/target/release/bundle/appimage/magic-mic_0.1.0_amd64.AppImage .

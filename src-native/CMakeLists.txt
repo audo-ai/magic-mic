@@ -28,6 +28,7 @@ target_link_libraries(server dl nlohmann_json::nlohmann_json spdlog::spdlog
                       tray)
 set_target_properties(server PROPERTIES BUNDLED_LIBS "libnotifymm,libnotify")
 
+set(MAGIC_MIC ${CMAKE_SOURCE_DIR})
 foreach(AP_CMAKE ${AUDIOPROC_CMAKES})
   get_filename_component(AP_NAME ${AP_CMAKE} NAME_WE)
   get_filename_component(AP_FILENAME ${AP_CMAKE} NAME)

@@ -9,7 +9,9 @@ at [audo.ai](https://audo.ai/) to provide easy access to a realtime version of
 our custom machine learning based noise removal tool. Just run the app, switch
 the microphone in whatever audio consuming app you are using (zoom, discord,
 google meet) to Magic Mic and you're off! This is still in **early** alpha and
-so is only available for pulseaudio on linux right now. This is still in active development and so bug fixes and new features will be coming, along with OS X and Windows support in the future.
+so is only available for pulseaudio on linux right now. This is still in active
+development and so bug fixes and new features will be coming, along with OS X
+and Windows support in the future.
 
 You can get a prebuilt version of magic mic from our [releases](https://github.com/audo-ai/magic-mic/releases).
 
@@ -59,48 +61,39 @@ Contact us in the github discussions tab or the issues.
 
 ## Development
 ### Structure
-This project has esentially 3 components. First, there is the code in `src-native` which interacts with the audio system and actually creates the virtual microphone and does the denoising. Then there is the [tauri](https://tauri.studio/en/) code in `src-tauri` which deals with creating the system webview and interacting with the frontend code. The naming of these directories is somewhat misleading, because both the code in `src-native` and the code in `src-tauri` are compiled to native code. Additionaly, there is `src-web` which contains a `create-react-app` project which is displayed by tauri. 
+This project has esentially 3 components. First, there is the code in
+`src-native` which interacts with the audio system and actually creates the
+virtual microphone and does the denoising. Then there is the
+[tauri](https://tauri.studio/en/) code in `src-tauri` which deals with creating
+the system webview and interacting with the frontend code. The naming of these
+directories is somewhat misleading, because both the code in `src-native` and
+the code in `src-tauri` are compiled to native code. Additionaly, there is
+`src-web` which contains a `create-react-app` project which is displayed by
+tauri.
 
-### Building Locally
-You can use the dockerfiles for development or your local machine. The
-dockerfiles are not optimized yet, so will likely be quite a pain to use. For
-the moment they can serve as a guide for installing dependencies.
-#### `src-native`
-The rough outline for building using rnnoise is:
+### Building with Docker
+Run
+```sh
+DOCKER_BUILDKIT=1 docker build --output . .
+```
+and the appimage should be copied into your working directory.
+
+### Building without Docker
+Run
 ```sh
 mkdir build
 cd build
 cmake -DVIRTMIC_ENGINE="PIPESOURCE" -DAUDIOPROC_CMAKES="$PWD/../src-native/RNNoiseAP.cmake" ..
-make install_tauri # Copies files and libs over to the src-tauri directory
+make build_tauri
 ```
-"PIPESOURCE" is the only virtmic engine available at the moment; in the future
-this may change for other platform or if we implement other virtual microphones.
+This should place an appimage in `src-tauri/target/release/bundle/appimage`.
 
-#### Frontend
-First you need to install [tauri](https://tauri.studio/en/) and run the `make
-install_tauri` command from above. Then you need to
-run `yarn` from the project root directory and the `src-web` directory. From
-there, running the app should be as simple as running `yarn tauri dev`, however
-tauri has some bugs currently so you need to run
-```sh
-RUST_LOG=trace make -C src-tauri dev
-```
-### Building with Docker
-We use Docker builds for releases, but you can also use them for testing or just
-as a reference if you like. To make a build using rnnoise simply run
-```sh
-DOCKER_BUILDKIT=1 docker build --output . . -f Dockerfile.rnnoise
-```
+`PIPESOURCE` is the only virtmic engine available at the moment; in the future
+this may change to support other platforms or if we implement other virtual microphones.
 
-**OUTDATED (Will be updated soon)**
-To build using a custom audio processor you need to have another docker image
-with the shared library located at `/audioproc.so`. Then run
-
-```sh
-DOCKER_BUILDKIT=1 docker build --build-arg AUDIO_PROCESSOR_IMAGE=$DOCKER_IMAGE .
-```
-You should end up with an appimage in your build directory when everything is
-done.
-
-Using the docker build for development is a pain right now because very little is
-cached, but we are looking to improve that.
+### Custom Audio Processors
+There is support for building with custom audio processors, and the
+documentation will be coming soon. For the meantime you could look at
+`src-native/RNNoiseAP.cmake` (and the files it references) as an example. Audio
+processors are added to the build by adding there cmake files to the semicolon
+seperated list `AUDIOPROC_CMAKES` when configuring the build.

@@ -225,6 +225,7 @@ if(${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
   add_custom_target(bundle_tauri ALL DEPENDS bundle_tauri_server
                                              ${AUDIOPROC_BUNDLE_TARGETS})
 
+  # Tauri stuff
   add_custom_target(
     install_tauri
     DEPENDS bundle_tauri
@@ -234,7 +235,23 @@ if(${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
       "${CMAKE_CURRENT_SOURCE_DIR}/src-tauri/native/runtime_libs"
     COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:server>
             "${CMAKE_CURRENT_SOURCE_DIR}/src-tauri/native/")
-
+  add_custom_target(
+    prepare_dev
+    DEPENDS install_tauri
+    COMMAND
+      ${CMAKE_COMMAND} -E copy_directory
+      "${CMAKE_CURRENT_SOURCE_DIR}/src-tauri/native/runtime_libs"
+      "${CMAKE_CURRENT_SOURCE_DIR}/src-tauri/target/debug/native"
+    COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:server>"
+            "${CMAKE_CURRENT_SOURCE_DIR}/src-tauri/target/debug/")
+  add_custom_target(
+    dev_tauri
+    DEPENDS prepare_dev
+    COMMAND env RUST_LOG=trace yarn tauri dev)
+  add_custom_target(
+    build_tauri
+    DEPENDS install_tauri
+    COMMAND yarn tauri build)
 else()
   message(FATAL_ERROR "Building on anything but linux is not yet supported")
 endif()
