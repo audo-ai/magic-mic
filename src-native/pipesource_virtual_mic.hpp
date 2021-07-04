@@ -148,7 +148,6 @@ private:
   // shared_ptr which is sort of cool I guess)
   int pipe_fd;
 
-  // TODO: factor this out into a tiny ring buffer
   circular_buffer<uint8_t> ring_buf;
 
   // TODO: I don't think we should allow mainloop to be freed before ctx
