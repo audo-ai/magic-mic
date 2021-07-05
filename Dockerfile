@@ -1,6 +1,8 @@
 # Must be run with DOCKER_BUILDKIT=1
 # syntax=docker/dockerfile:experimental
-FROM ubuntu:18.04 as common
+ARG TARGET=rnnoise
+ARG BASE_IMAGE=ubuntu:18.04
+FROM $BASE_IMAGE as common
 
 SHELL ["/bin/bash", "-c"]
 # For some reason, things fail to install later without this command
@@ -105,5 +107,22 @@ RUN cd /src && \
 	  -DVIRTMIC_ENGINE="PIPESOURCE" .. && \
     make build_tauri -j $(nproc)
 
+FROM common as audo
+RUN cd /src && \
+    PATH=$HOME/lsmod_shim:$PATH && \
+    source $HOME/.cargo/env && \
+    \. ~/.nvm/nvm.sh && nvm use 12.13 && \
+    mkdir build && \
+    cd build && \
+    cmake -C /src-libdenoiser/cache.cmake \
+	  -DCMAKE_CXX_COMPILER=`which g++-10` \
+	  -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+	  -DAUDIOPROC_CMAKES="$PWD/../src-native/RNNoiseAP.cmake;/src-libdenoiser/AudoAP.cmake" \
+	  -DVIRTMIC_ENGINE="PIPESOURCE" \
+	  -DCMAKE_PREFIX_PATH=/src-libdenoiser/cmake_prefix .. && \
+    make build_tauri -j $(nproc)
+
+# Give target a constant name so that the copy works
+FROM $TARGET as build
 FROM scratch as bin
-COPY --from=rnnoise /src/src-tauri/target/release/bundle/appimage/magic-mic_0.1.0_amd64.AppImage .
+COPY --from=build /src/src-tauri/target/release/bundle/appimage/magic-mic_0.1.0_amd64.AppImage .

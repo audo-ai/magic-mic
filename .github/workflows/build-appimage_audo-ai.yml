@@ -1,0 +1,37 @@
+name: Build Audo AI AppImage
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - uses: dsaltares/fetch-gh-release-asset@master
+      with:
+        repo: "audo-ai/libdenoiser"
+        version: "latest"
+        file: "audo-ai-denoiser-image.zip"
+        target: "audo-ai-denoiser-image.zip"
+        token: ${{ secrets.DENOISER_ACCESS_TOKEN }}
+      run: unzip audo-ai-denoiser-image.zip
+    - name: Install image
+      run: docker load -i audo-ai-denoiser-image.tar.gz
+    - name: Build AppImage
+      run: DOCKER_BUILDKIT=1 docker build --build-arg BASE_IMAGE=audo-ai-denoiser:latest --build-arg TARGET=audo . --output .
+    - name: Rename AppImage
+      id: rename-appimage
+      run: |
+        output=magic-mic_$(git rev-parse HEAD | cut -c 1-8)_audo-ai.AppImage
+        echo "::set-output name=file::$output"
+        mv magic-mic.AppImage "$output"
+    - name: Upload AppImage
+      uses: actions/upload-artifact@master
+      with:
+        name: ${{ steps.rename-appimage.outputs.file }}
+        path: ${{ steps.rename-appimage.outputs.file }}
+        if-no-files-found: error
