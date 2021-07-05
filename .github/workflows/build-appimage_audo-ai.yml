@@ -29,7 +29,7 @@ jobs:
       run: |
         output=magic-mic_$(git rev-parse HEAD | cut -c 1-8)_audo-ai.AppImage
         echo "::set-output name=file::$output"
-        mv magic-mic.AppImage "$output"
+        mv magic-mic*.AppImage "$output"
     - name: Upload AppImage
       uses: actions/upload-artifact@master
       with:
