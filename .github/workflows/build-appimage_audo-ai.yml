@@ -18,6 +18,7 @@ jobs:
         file: "audo-ai-denoiser-image.zip"
         target: "audo-ai-denoiser-image.zip"
         token: ${{ secrets.DENOISER_ACCESS_TOKEN }}
+    - name: Unzip audo-ai-denoiser-image
       run: unzip audo-ai-denoiser-image.zip
     - name: Install image
       run: docker load -i audo-ai-denoiser-image.tar.gz
